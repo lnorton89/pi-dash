@@ -1,0 +1,46 @@
+# pi-dash configuration.
+#
+# Every key is optional; anything left out keeps its built-in default, so a
+# three-line file that only moves the API port is a valid config.
+#
+# Precedence is env > this file > defaults. CLASSG_API and CLASSG_DASH_INTERVAL
+# both win over what is written here, which keeps the habit from the Bash
+# dashboard working:  CLASSG_API=http://pi:9000 pi-dash
+#
+# Searched, in order: next to the binary, the working directory, then
+# ~/.config/pi-dash/pi-dash.toml. Pass --config to name one explicitly.
+
+[dash]
+# Base URL of the ClassG API, without the /api/v1 suffix. This build has no
+# TLS — the API is on loopback and linking a TLS stack to reach 127.0.0.1 is
+# not a trade worth making on a Pi — so an https:// URL is reported as
+# unsupported rather than silently failing.
+api = "http://127.0.0.1:8081"
+
+# Seconds between local samples (/proc, /sys, vcgencmd). Fractional is fine.
+# Clamped to 0.25..3600: a zero interval would spin the sample loop at full
+# CPU on a box whose whole problem is that it browns out under load.
+interval_secs = 2.0
+
+# Seconds between ClassG API polls. Separate from interval_secs because it is
+# the only sample that leaves the process, and it runs on its own thread.
+api_interval_secs = 3.0
+
+# Accent colour for borders and the title chip. Any standard terminal colour
+# name; an unrecognised one falls back to cyan rather than failing to start.
+theme = "cyan"
+
+# Rows of process table to show. Omit to fill whatever the pane has room for.
+# processes = 12
+
+[radios]
+# USB vendor IDs treated as radios. Defaults cover MediaTek, Realtek (which is
+# also where the RTL-SDR lands), Ralink, TP-Link, Atheros and Great Scott.
+# On the Pi this was written for: 0e8d:7961 (ALFA AWUS036AXML) and 0bda:2838
+# (RTL-SDR Blog V4).
+usb_vendor_ids = ["0e8d", "0bda", "148f", "2357", "0cf3", "1d50"]
+
+# Interfaces to hide. A trailing * globs a prefix; everything else is exact.
+# Container and virtual-bridge plumbing is not a radio, and a Pi running the
+# ClassG stack in Docker has a lot of it.
+ignore_interfaces = ["lo", "docker*", "br-*", "veth*", "virbr*", "tailscale*"]

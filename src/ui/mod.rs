@@ -1,0 +1,251 @@
+//! All ratatui drawing, one module per pane:
+//!
+//! - [`system`] — CPU, memory and the process table (the btop replacement)
+//! - [`health`] — temperature, power, clock, throttle bits, disk and I/O
+//! - [`radios`] — interfaces, monitor mode, USB radios
+//! - [`classg`] — the ClassG API pane
+//!
+//! There is no animation anywhere in here, deliberately. The Bash version
+//! redrew by homing the cursor and clearing each line as it was rewritten
+//! rather than clearing the screen, because on a Pi over SSH a full clear per
+//! tick flickers badly enough to be tiring to watch. Ratatui's renderer
+//! already does better than that — it diffs the buffer and writes only the
+//! cells that changed — but only if the frame is mostly the same as the last
+//! one. A shimmering border would repaint every cell every tick and hand the
+//! flicker straight back.
+
+pub mod classg;
+pub mod health;
+pub mod radios;
+pub mod system;
+
+use chrono::Local;
+use ratatui::{
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    Frame,
+};
+
+use crate::app::{App, Mode, Pane};
+use crate::config::{NARROW_COLS, READER_MAX_COLS, READER_MIN_COLS};
+
+/// Green/amber/red, used identically by every pane so a colour means the same
+/// thing wherever you see it.
+pub const OK: Color = Color::Green;
+pub const WARN: Color = Color::Yellow;
+pub const BAD: Color = Color::Red;
+pub const DIM: Color = Color::DarkGray;
+
+pub fn draw(frame: &mut Frame, app: &mut App) {
+    let area = frame.area();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Min(3),
+            Constraint::Length(1),
+        ])
+        .split(area);
+
+    draw_header(frame, chunks[0], app);
+    if area.width >= NARROW_COLS {
+        draw_wide(frame, chunks[1], app);
+    } else {
+        draw_narrow(frame, chunks[1], app);
+    }
+    draw_footer(frame, chunks[2], app, area.width >= NARROW_COLS);
+
+    if app.mode == Mode::Help {
+        draw_help(frame, area, app);
+    }
+}
+
+/// The two-column layout. The reader column is clamped rather than
+/// proportional: the panes in it are built around a ~46-column body, and
+/// wider than about 60 the right-hand side is mostly padding — on a large
+/// monitor that means a third of the screen showing nothing. The system pane
+/// gets every column the readers cannot use.
+fn draw_wide(frame: &mut Frame, area: Rect, app: &mut App) {
+    let reader = area
+        .width
+        .saturating_mul(42)
+        .saturating_div(100)
+        .clamp(READER_MIN_COLS, READER_MAX_COLS);
+
+    let columns = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(30), Constraint::Length(reader)])
+        .split(area);
+
+    system::draw(frame, columns[0], app);
+
+    // Both fixed-height panes write a known number of lines, so measure them
+    // and hand every remaining row to the ClassG pane — it is the only one
+    // with more to say when it has the room, and it scales its track and
+    // detection lists to the height it is given. Splitting the column into
+    // equal thirds instead gave the health pane 24 rows for its 7 lines.
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(health::CONTENT_ROWS + 2),
+            Constraint::Length(app.radios.content_rows() + 2),
+            Constraint::Min(4),
+        ])
+        .split(columns[1]);
+
+    health::draw(frame, rows[0], app);
+    radios::draw(frame, rows[1], app);
+    classg::draw(frame, rows[2], app);
+}
+
+/// One pane at a time. Stacking four panes into fewer than 100 columns leaves
+/// every one of them unreadable; the Bash version put btop in its own tmux
+/// window at this point, which is the same trade made without tmux.
+fn draw_narrow(frame: &mut Frame, area: Rect, app: &mut App) {
+    match app.focus {
+        Pane::System => system::draw(frame, area, app),
+        Pane::Health => health::draw(frame, area, app),
+        Pane::Radios => radios::draw(frame, area, app),
+        Pane::Classg => classg::draw(frame, area, app),
+    }
+}
+
+fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
+    let left = Line::from(vec![
+        Span::styled(
+            " pi-dash ",
+            Style::default()
+                .bg(app.accent)
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        Span::styled(app.host.clone(), Style::default().fg(Color::White)),
+        Span::styled("  ", Style::default()),
+        Span::styled(
+            app.config.api.trim_start_matches("http://").to_string(),
+            Style::default().fg(DIM),
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(left), area);
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            format!("{} ", Local::now().format("%H:%M:%S")),
+            Style::default().fg(DIM),
+        )))
+        .alignment(Alignment::Right),
+        area,
+    );
+}
+
+fn draw_footer(frame: &mut Frame, area: Rect, app: &App, wide: bool) {
+    let keys = if wide {
+        " q quit · r refresh now · ? help ".to_string()
+    } else {
+        format!(
+            " tab/1-4 pane ({}) · q quit · r refresh · ? help ",
+            app.focus.title()
+        )
+    };
+    frame.render_widget(
+        Paragraph::new(keys)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(DIM)),
+        area,
+    );
+}
+
+fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
+    let width = area.width.min(64);
+    let height = area.height.min(18);
+    let popup = Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + (area.height - height) / 2,
+        width,
+        height,
+    };
+    let source = app
+        .config
+        .source
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "built-in defaults".to_string());
+
+    let lines = vec![
+        Line::from(Span::styled(
+            " Keys",
+            Style::default().fg(app.accent).add_modifier(Modifier::BOLD),
+        )),
+        Line::from("  q / Esc / Ctrl-C   quit"),
+        Line::from("  r                  sample now, don't wait for the tick"),
+        Line::from("  tab / 1-4          switch pane (narrow terminals only)"),
+        Line::from("  Ctrl-L             force a full repaint"),
+        Line::from("  ?                  close this"),
+        Line::default(),
+        Line::from(Span::styled(
+            " Config",
+            Style::default().fg(app.accent).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(format!("  from      {source}")),
+        Line::from(format!("  api       {}", app.config.api)),
+        Line::from(format!(
+            "  interval  {:.1}s local, {:.1}s api",
+            app.config.interval.as_secs_f64(),
+            app.config.api_interval.as_secs_f64()
+        )),
+        Line::default(),
+        Line::from(Span::styled(
+            "  env CLASSG_API and CLASSG_DASH_INTERVAL override the file.",
+            Style::default().fg(DIM),
+        )),
+    ];
+
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .block(pane_block(" Help ", app.accent)),
+        popup,
+    );
+}
+
+/// The standard bordered pane.
+pub fn pane_block<'a>(title: &'a str, border: Color) -> Block<'a> {
+    Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(border))
+        .title(title)
+        .title_style(
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .title_alignment(Alignment::Left)
+}
+
+/// A label/value line, with the label in the fixed-width gutter every pane
+/// shares so values line up down the whole column.
+pub fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
+    let mut spans = vec![Span::styled(
+        format!("  {label:<7}"),
+        Style::default().fg(DIM),
+    )];
+    spans.extend(value);
+    Line::from(spans)
+}
+
+/// Green below `warn`, amber below `bad`, red above.
+pub fn threshold_color(value: f64, warn: f64, bad: f64) -> Color {
+    if value >= bad {
+        BAD
+    } else if value >= warn {
+        WARN
+    } else {
+        OK
+    }
+}
+
+#[cfg(test)]
+mod tests;

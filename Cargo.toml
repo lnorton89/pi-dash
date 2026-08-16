@@ -1,0 +1,28 @@
+[package]
+name = "pi-dash"
+version = "0.1.0"
+edition = "2021"
+description = "One-window terminal dashboard for the ClassG Raspberry Pi"
+license = "MIT"
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+dirs = "5"
+chrono = "0.4"
+hostname = "0.4"
+# HTTP only, no TLS. The API this talks to is on loopback by default and the
+# whole point of the pane is that it degrades rather than fails, so pulling a
+# rustls/ring build onto a Pi to reach 127.0.0.1 would be a poor trade. An
+# https:// base URL is reported as unsupported instead of silently failing.
+ureq = { version = "2.12", default-features = false }
+
+[profile.release]
+# The Pi builds this itself; a monitoring tool is not worth a long LTO link.
+lto = "thin"
+strip = true
