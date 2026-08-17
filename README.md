@@ -77,6 +77,15 @@ cargo build --release
 Keys: `q`/`Esc`/`Ctrl-C` quit · `r` sample now · `?` help · `Ctrl-L` repaint ·
 `Tab`/`1`-`4` switch pane (narrow terminals only).
 
+To get it on `PATH` as `pidash`:
+
+```sh
+sudo ./install.sh              # or: ./install.sh ~/.local/bin
+```
+
+That writes a wrapper pointing at this checkout's release build, so rebuilding
+here takes effect without reinstalling.
+
 Below 100 columns the two-column layout leaves both halves unreadable, so the
 dashboard shows one pane at a time instead — the same trade the Bash version
 made by giving btop its own tmux window.
