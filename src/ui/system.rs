@@ -19,7 +19,7 @@ use ratatui::{
 };
 
 use super::gauge::{self, Glyphs, Ramp};
-use super::{field, pane_block, threshold_color, DIM};
+use super::{field, pane_block, push_if_fits, table_header, threshold_color, DIM, GUTTER};
 use crate::app::App;
 use crate::format::{human_kb, uptime};
 
@@ -53,11 +53,6 @@ const GRAPH_MIN_ROWS: usize = 3;
 /// Process rows the graph will not eat into. A history graph above an empty
 /// table answers the wrong question.
 const PROC_ROWS_RESERVED: usize = 5;
-
-/// The left gutter [`field`] establishes: two spaces plus a seven-column
-/// label. The graph lines up with it so the graph and the meters below share
-/// one left edge instead of looking like two unrelated widgets.
-const GUTTER: usize = 9;
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let system = &app.system;
@@ -292,18 +287,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if rows > 0 {
         let cols = proc_columns(width);
         let (name_w, cmd_w, bar_w) = (cols.name, cols.cmdline, cols.bar);
-        lines.push(Line::from(Span::styled(
-            // CPU% is right-aligned over the numbers below it, not left over
-            // the space before them.
-            format!(
-                "  {:<PID_W$}{:<name_w$}{:<cmd_w$}{:>MEM_W$}   {:>5}",
-                "PID",
-                "COMMAND",
-                if cmd_w > 0 { "COMMAND LINE" } else { "" },
-                "MEM",
-                "CPU%"
-            ),
-            Style::default().fg(DIM).add_modifier(Modifier::BOLD),
+        // CPU% is right-aligned over the numbers below it, not left over the
+        // space before them.
+        lines.push(table_header(format!(
+            "  {:<PID_W$}{:<name_w$}{:<cmd_w$}{:>MEM_W$}   {:>5}",
+            "PID",
+            "COMMAND",
+            if cmd_w > 0 { "COMMAND LINE" } else { "" },
+            "MEM",
+            "CPU%"
         )));
         // Only the busiest are listed. A Pi runs a couple of hundred mostly
         // idle processes and a full table is a scrolling wall you never read;
@@ -379,27 +371,6 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     frame.render_widget(Paragraph::new(lines), inner);
-}
-
-/// Appends a dim suffix, but only if the line still has room for all of it.
-///
-/// The pane renders without wrapping, so a tail that does not fit is not
-/// wrapped — it is sliced wherever the pane ends, which is how a 45-column
-/// pane produced `1.9G reclaimab` and a load average cut off after the word
-/// `load`. Returns whether it fitted, so a caller can offer a shorter form.
-fn push_if_fits<'a>(
-    spans: &mut Vec<Span<'a>>,
-    used: &mut usize,
-    width: usize,
-    text: String,
-) -> bool {
-    let len = text.chars().count();
-    if *used + len > width {
-        return false;
-    }
-    *used += len;
-    spans.push(Span::styled(text, Style::default().fg(DIM)));
-    true
 }
 
 /// How the CPU block lays itself out for a given pane.

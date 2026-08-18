@@ -94,12 +94,11 @@ pub struct Iface {
     /// `None` for a wired interface.
     pub mode: Option<WirelessMode>,
     pub channel: Option<u32>,
-}
-
-impl Iface {
-    pub fn is_up(&self) -> bool {
-        self.state == "up" || self.state == "unknown"
-    }
+    /// Kernel module behind the interface — `mt7921u`, `brcmfmac`. This is
+    /// the fact that tells two identical-looking `wlan*` entries apart, and
+    /// the one you need when a monitor-mode capture is not producing frames:
+    /// which of the adapters plugged into this Pi is which.
+    pub driver: Option<String>,
 }
 
 /// A USB device the dashboard considers a radio.
@@ -189,6 +188,16 @@ pub struct RadiosPane {
     pub usb: Vec<UsbRadio>,
 }
 
+/// The driver behind an interface, from the `device/driver` symlink in sysfs.
+///
+/// A symlink read, not a `readlink` fork: the target is a path into
+/// `/sys/bus/.../drivers/<name>` and only its last component is wanted. Absent
+/// for virtual interfaces, which have no backing device at all.
+fn read_driver(sys: &std::path::Path) -> Option<String> {
+    let target = std::fs::read_link(sys.join("device/driver")).ok()?;
+    Some(target.file_name()?.to_string_lossy().to_string())
+}
+
 impl RadiosPane {
     pub fn sample(&mut self, now: Instant, vendor_ids: &[String], ignore: &[String]) {
         let elapsed = self
@@ -231,6 +240,7 @@ impl RadiosPane {
                 tx_bps,
                 mode,
                 channel: self.channel_cache.get(name).copied(),
+                driver: read_driver(&sys),
             });
         }
         self.prev = counters.into_iter().collect();
@@ -266,12 +276,16 @@ impl RadiosPane {
         }
     }
 
-    /// How many rows the pane needs, so the layout can pin it. Interfaces,
-    /// a blank line, the USB heading, and at least one USB line (the "none
-    /// present" warning takes a row too).
+    /// How many rows the pane needs, so the layout can pin it.
+    ///
+    /// Each table is a heading plus its rows, and an empty one collapses to
+    /// the single line that says so — the "none present" warning takes a row
+    /// exactly like a device would. Between them sit a blank line and the USB
+    /// section title. Under-counting here does not scroll the pane, it clips
+    /// it, and the row that goes is the one saying the adapters are gone.
     pub fn content_rows(&self) -> u16 {
-        let usb = self.usb.len().max(1);
-        (self.ifaces.len() + usb + 2) as u16
+        let table = |rows: usize| if rows == 0 { 1 } else { rows + 1 };
+        (table(self.ifaces.len()) + 2 + table(self.usb.len())) as u16
     }
 }
 
@@ -422,25 +436,5 @@ Interface wlan1
 ";
         assert_eq!(parse_iw_channel(text), Some(6));
         assert_eq!(parse_iw_channel("Interface wlan0\n\ttype managed\n"), None);
-    }
-
-    #[test]
-    fn an_interface_with_unknown_operstate_counts_as_up() {
-        // Monitor-mode interfaces routinely report `unknown` rather than `up`,
-        // and colouring them red made the pane cry wolf every session.
-        let monitor = Iface {
-            name: "wlan1mon".into(),
-            state: "unknown".into(),
-            rx_bps: 0.0,
-            tx_bps: 0.0,
-            mode: Some(WirelessMode::Monitor),
-            channel: None,
-        };
-        assert!(monitor.is_up());
-        let down = Iface {
-            state: "down".into(),
-            ..monitor.clone()
-        };
-        assert!(!down.is_up());
     }
 }

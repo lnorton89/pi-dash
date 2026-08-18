@@ -316,6 +316,171 @@ fn a_kernel_thread_is_bracketed_rather_than_left_blank() {
 }
 
 #[test]
+fn a_monitor_interface_reporting_unknown_is_not_drawn_as_a_fault() {
+    // Monitor-mode interfaces routinely report `unknown` rather than `up`,
+    // because there is no association to have an opinion about. Colouring
+    // that red made the pane cry wolf every session. This used to be an
+    // `Iface::is_up` predicate; the judgement now lives in the row renderer,
+    // so the test follows it here.
+    use crate::panes::radios::{Iface, WirelessMode};
+
+    let mut app = test_app();
+    app.radios.ifaces = vec![
+        Iface {
+            name: "wlan1".into(),
+            state: "unknown".into(),
+            rx_bps: 0.0,
+            tx_bps: 0.0,
+            mode: Some(WirelessMode::Monitor),
+            channel: Some(6),
+            driver: Some("mt7921u".into()),
+        },
+        Iface {
+            name: "eth0".into(),
+            state: "down".into(),
+            rx_bps: 0.0,
+            tx_bps: 0.0,
+            mode: None,
+            channel: None,
+            driver: Some("bcmgenet".into()),
+        },
+    ];
+    app.focus = Pane::Radios;
+
+    let mut terminal = ratatui::Terminal::new(TestBackend::new(120, 30)).expect("test backend");
+    terminal
+        .draw(|frame| draw(frame, &mut app))
+        .expect("draw must not fail");
+    let buffer = terminal.backend().buffer().clone();
+
+    // Cell columns, not byte offsets: the frame is drawn with box characters
+    // that are three bytes each, so `str::find` desynchronises from the
+    // buffer's coordinates the moment a row contains one.
+    let colour_of = |needle: &str| -> Option<ratatui::style::Color> {
+        let needle: Vec<char> = needle.chars().collect();
+        for y in 0..30u16 {
+            let row: Vec<String> = (0..120u16)
+                .map(|x| buffer[(x, y)].symbol().to_string())
+                .collect();
+            let flat: String = row.concat();
+            if !flat.contains("wlan1") && !flat.contains("eth0") {
+                continue;
+            }
+            for x in 0..row.len().saturating_sub(needle.len()) {
+                if needle
+                    .iter()
+                    .enumerate()
+                    .all(|(i, c)| row[x + i] == c.to_string())
+                {
+                    return buffer[(x as u16, y)].fg.into();
+                }
+            }
+        }
+        None
+    };
+
+    assert_ne!(
+        colour_of("unkn"),
+        Some(super::BAD),
+        "an unknown operstate must not read as a fault"
+    );
+    assert_eq!(
+        colour_of("down"),
+        Some(super::BAD),
+        "a genuinely down link still must"
+    );
+}
+
+#[test]
+fn every_health_meter_starts_at_the_same_column() {
+    // Sizing each row's value field to its own content put the temperature,
+    // clock and disk bars at three different columns and made the pane read
+    // as a ragged list rather than a table.
+    use crate::panes::health::{DiskUsage, IoRates};
+
+    let mut app = test_app();
+    app.health.temp_c = Some(39.4);
+    app.health.volts = Some(0.85);
+    app.health.arm_mhz = Some(1000);
+    app.health.max_mhz = Some(1800);
+    app.health.disk = Some(DiskUsage {
+        used_kb: 31_775_129,
+        total_kb: 122_683_392,
+    });
+    app.health.io = IoRates::default();
+    app.focus = Pane::Health;
+
+    for width in 50..140u16 {
+        let rows = render(&mut app, width, 30);
+        let starts: Vec<usize> = ["  temp ", "  clock ", "  disk "]
+            .iter()
+            .filter_map(|label| {
+                let row = rows.iter().find(|r| r.contains(*label))?;
+                // The first meter cell, filled or track. Block characters
+                // only: `.` and `#` also match the decimal point in `39.4C`,
+                // which is how this test first reported a column of 13.
+                row.char_indices()
+                    .filter(|(_, c)| matches!(c, '\u{2588}'..='\u{2593}'))
+                    .map(|(i, _)| row[..i].chars().count())
+                    .next()
+            })
+            .collect();
+        assert_eq!(starts.len(), 3, "all three rows must draw a meter");
+        assert!(
+            starts.windows(2).all(|w| w[0] == w[1]),
+            "meters start at {starts:?} at width {width}"
+        );
+    }
+}
+
+#[test]
+fn every_table_on_screen_has_a_heading_over_it() {
+    // The columns these label were four unlabelled numbers and a word.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.radios.ifaces = vec![crate::panes::radios::Iface {
+        name: "wlan1".into(),
+        state: "unknown".into(),
+        rx_bps: 3993.0,
+        tx_bps: 0.0,
+        mode: Some(crate::panes::radios::WirelessMode::Monitor),
+        channel: Some(11),
+        driver: Some("mt7921u".into()),
+    }];
+    app.radios.usb = vec![crate::panes::radios::UsbRadio {
+        id: "0bda:2838".into(),
+        description: "RTLSDRBlog Blog V4".into(),
+    }];
+    app.classg.snapshot = Snapshot {
+        health: Some(HealthResponse {
+            status: "ok".to_string(),
+            sensors: vec![SensorHealth {
+                sensor_id: "sdr-0".to_string(),
+                sensor_kind: "sdr".to_string(),
+                healthy: true,
+                ..SensorHealth::default()
+            }],
+            ..HealthResponse::default()
+        }),
+        ..Snapshot::default()
+    };
+
+    let rows = render(&mut app, 152, 48);
+    for heading in [
+        "PID", "COMMAND", "MEM", "CPU%", // system
+        "IFACE", "LINK", "RX", "TX", "MODE", "CH", "DRIVER", // radios
+        "VID:PID", "DEVICE", // usb
+        "SENSOR", "KIND", "STATE", "BEAT", "5MIN", // classg sensors
+    ] {
+        assert!(
+            contains(&rows, heading),
+            "no {heading} heading:\n{}",
+            rows.join("\n")
+        );
+    }
+}
+
+#[test]
 fn a_missing_vcgencmd_reads_as_unknown_not_as_ok() {
     let mut app = test_app();
     app.health.throttle = None;

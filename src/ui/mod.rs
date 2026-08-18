@@ -244,6 +244,43 @@ pub fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
     Line::from(spans)
 }
 
+/// A column-header row for a table inside a pane.
+///
+/// Every table on screen uses this, so a heading always looks like a heading
+/// and never like the first row of data — which is what a plain bold line
+/// looked like next to a process name.
+pub fn table_header<'a>(text: String) -> Line<'a> {
+    Line::from(Span::styled(
+        text,
+        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
+    ))
+}
+
+/// Appends a dim suffix, but only if the line still has room for all of it.
+///
+/// The panes render without wrapping, so a tail that does not fit is not
+/// wrapped — it is sliced wherever the pane ends, which is how a 45-column
+/// pane produced `1.9G reclaimab` and a load average cut off after the word
+/// `load`. Returns whether it fitted, so a caller can offer a shorter form.
+pub fn push_if_fits<'a>(
+    spans: &mut Vec<Span<'a>>,
+    used: &mut usize,
+    width: usize,
+    text: String,
+) -> bool {
+    let len = text.chars().count();
+    if *used + len > width {
+        return false;
+    }
+    *used += len;
+    spans.push(Span::styled(text, Style::default().fg(DIM)));
+    true
+}
+
+/// The left gutter [`field`] establishes: two spaces plus a seven-column
+/// label. Tables line their first column up with it.
+pub const GUTTER: usize = 9;
+
 /// Green below `warn`, amber below `bad`, red above.
 pub fn threshold_color(value: f64, warn: f64, bad: f64) -> Color {
     if value >= bad {

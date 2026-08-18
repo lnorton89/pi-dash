@@ -13,7 +13,7 @@ use ratatui::{
     Frame,
 };
 
-use super::{pane_block, BAD, DIM, OK, WARN};
+use super::{pane_block, table_header, BAD, DIM, OK, WARN};
 use crate::app::App;
 use crate::format::{clip, coarse_uptime, short_age};
 use crate::panes::classg::{DetectionPage, FlexTime, HealthResponse, TrackPage};
@@ -122,13 +122,14 @@ fn health_lines<'a>(health: &HealthResponse) -> Vec<Line<'a>> {
             ),
             Span::styled(
                 format!(
-                    "   up {}   {}",
+                    "   up {}   api v{}",
                     coarse_uptime(health.uptime_s),
                     health.version
                 ),
                 Style::default().fg(DIM),
             ),
         ]),
+        Line::default(),
         Line::from(Span::styled(
             "  sensors",
             Style::default().add_modifier(Modifier::BOLD),
@@ -140,32 +141,49 @@ fn health_lines<'a>(health: &HealthResponse) -> Vec<Line<'a>> {
             "   no sensors reporting",
             Style::default().fg(DIM),
         )));
+    } else {
+        // BEAT is the age of the last heartbeat and 5MIN the detection count
+        // over the last five minutes. Unheaded they rendered as `5s 5m:40`,
+        // which is two numbers and a unit nobody can expand on sight.
+        lines.push(table_header(format!(
+            "   {:<11}{:<6}{:<6}{:>5}{:>7}",
+            "SENSOR", "KIND", "STATE", "BEAT", "5MIN"
+        )));
     }
     for sensor in &health.sensors {
         // An optional sensor that is down is a configuration you chose, not a
         // fault — the SDR is optional on a Wi-Fi-only build. It gets amber and
         // lower case so a genuinely broken required sensor still stands out.
         let (mark, color) = match (sensor.healthy, sensor.optional) {
-            (true, _) => ("ok  ", OK),
-            (false, true) => ("off ", WARN),
+            (true, _) => ("ok", OK),
+            (false, true) => ("off", WARN),
             (false, false) => ("DOWN", BAD),
         };
         lines.push(Line::from(vec![
-            Span::raw(format!("   {:<10} ", clip(&sensor.sensor_id, 10))),
+            Span::raw(format!("   {:<11}", clip(&sensor.sensor_id, 10))),
             Span::styled(
-                format!("{:<4} ", clip(&sensor.sensor_kind, 4)),
+                format!("{:<6}", clip(&sensor.sensor_kind, 5)),
                 Style::default().fg(DIM),
             ),
-            Span::styled(mark, Style::default().fg(color)),
-            Span::raw(format!(
-                " {:>5} ",
-                sensor
-                    .seconds_since_heartbeat
-                    .map(|s| format!("{s}s"))
-                    .unwrap_or_else(|| "-".to_string())
-            )),
+            Span::styled(format!("{mark:<6}"), Style::default().fg(color)),
             Span::styled(
-                format!("5m:{}", sensor.detections_5m),
+                format!(
+                    "{:>5}",
+                    sensor
+                        .seconds_since_heartbeat
+                        .map(|s| format!("{s}s"))
+                        .unwrap_or_else(|| "-".to_string())
+                ),
+                // A heartbeat that has stopped is the thing this column is
+                // for, so it stops being dim once it is older than a poll or
+                // two. The API's own health check is slower than that.
+                Style::default().fg(match sensor.seconds_since_heartbeat {
+                    Some(s) if s > 30 => WARN,
+                    _ => DIM,
+                }),
+            ),
+            Span::styled(
+                format!("{:>7}", sensor.detections_5m),
                 Style::default().fg(DIM),
             ),
         ]));
@@ -181,27 +199,34 @@ fn health_lines<'a>(health: &HealthResponse) -> Vec<Line<'a>> {
     }
 
     let fusion = health.fusion.clone().unwrap_or_default();
+    lines.push(Line::default());
     lines.push(if fusion.connected {
         Line::from(vec![
-            Span::raw("  fusion   "),
+            Span::styled("  fusion   ", Style::default().fg(DIM)),
             Span::styled("connected", Style::default().fg(OK)),
             Span::styled(
-                format!(" last {}", age_of(fusion.last_message.as_ref())),
+                // "last -" said nothing. The age is of the last message off
+                // the link, which is the only thing that distinguishes a live
+                // connection from a socket nobody has written to since boot.
+                match fusion.last_message.as_ref() {
+                    Some(ts) => format!("   last message {}", short_age(ts.age_secs())),
+                    None => "   no messages yet".to_string(),
+                },
                 Style::default().fg(DIM),
             ),
         ])
     } else if fusion.configured {
         Line::from(vec![
-            Span::raw("  fusion   "),
+            Span::styled("  fusion   ", Style::default().fg(DIM)),
             Span::styled("down", Style::default().fg(BAD)),
             Span::styled(
-                format!(" {}", clip(fusion.reason.as_deref().unwrap_or(""), 30)),
+                format!("   {}", clip(fusion.reason.as_deref().unwrap_or(""), 30)),
                 Style::default().fg(DIM),
             ),
         ])
     } else {
         Line::from(vec![
-            Span::raw("  fusion   "),
+            Span::styled("  fusion   ", Style::default().fg(DIM)),
             Span::styled("not configured", Style::default().fg(DIM)),
         ])
     });
@@ -230,12 +255,16 @@ fn track_lines<'a>(page: Option<&TrackPage>, room: usize) -> Vec<Line<'a>> {
         )));
         return lines;
     }
-    for track in page.tracks.iter().take(room) {
+    lines.push(table_header(format!(
+        "   {:<10}{:<6}{:<17}{:>5}",
+        "STATE", "CONF", "IDENTITY", "SEEN"
+    )));
+    for track in page.tracks.iter().take(room.saturating_sub(1)) {
         let confidence = track.confidence;
         lines.push(Line::from(vec![
-            Span::raw(format!("   {:<9} ", clip(&track.state, 9))),
+            Span::raw(format!("   {:<10}", clip(&track.state, 9))),
             Span::styled(
-                format!("{confidence:.2}"),
+                format!("{confidence:<6.2}"),
                 Style::default().fg(if confidence >= 0.7 {
                     OK
                 } else if confidence >= 0.4 {
@@ -245,7 +274,7 @@ fn track_lines<'a>(page: Option<&TrackPage>, room: usize) -> Vec<Line<'a>> {
                 }),
             ),
             Span::raw(format!(
-                " {:<16} ",
+                "{:<17}",
                 clip(
                     &track
                         .identity
@@ -255,7 +284,10 @@ fn track_lines<'a>(page: Option<&TrackPage>, room: usize) -> Vec<Line<'a>> {
                     16
                 )
             )),
-            Span::styled(age_of(track.last_seen.as_ref()), Style::default().fg(DIM)),
+            Span::styled(
+                format!("{:>5}", age_of(track.last_seen.as_ref())),
+                Style::default().fg(DIM),
+            ),
         ]));
     }
     lines
@@ -284,26 +316,32 @@ fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize) -> Vec<Line<'a
         )));
         return lines;
     }
-    for detection in page.detections.iter().take(room) {
+    lines.push(table_header(format!(
+        "   {:<9}{:<5}{:<14}{:>5}{:>5}  {}",
+        "TIME", "KIND", "CLASS", "dBm", "CH", "IDENTITY"
+    )));
+    for detection in page.detections.iter().take(room.saturating_sub(1)) {
         let rf = detection.rf.clone().unwrap_or_default();
         let (rssi_text, rssi_color) = match rf.rssi_dbm {
-            Some(rssi) if rssi > -60.0 => (format!("{rssi:>4.0}"), OK),
-            Some(rssi) if rssi > -75.0 => (format!("{rssi:>4.0}"), WARN),
-            Some(rssi) => (format!("{rssi:>4.0}"), DIM),
-            None => ("   -".to_string(), DIM),
+            Some(rssi) if rssi > -60.0 => (format!("{rssi:.0}"), OK),
+            Some(rssi) if rssi > -75.0 => (format!("{rssi:.0}"), WARN),
+            Some(rssi) => (format!("{rssi:.0}"), DIM),
+            None => ("-".to_string(), DIM),
         };
         lines.push(Line::from(vec![
-            Span::raw(format!("   {} ", clock_of(detection.ts.as_ref()))),
+            Span::raw(format!("   {:<9}", clock_of(detection.ts.as_ref()))),
             Span::styled(
-                format!("{:<4} ", clip(&detection.sensor_kind, 4)),
+                format!("{:<5}", clip(&detection.sensor_kind, 4)),
                 Style::default().fg(DIM),
             ),
-            Span::raw(format!("{:<13} ", clip(&detection.detection_class, 13))),
-            Span::styled(rssi_text, Style::default().fg(rssi_color)),
+            Span::raw(format!("{:<14}", clip(&detection.detection_class, 13))),
+            Span::styled(format!("{rssi_text:>5}"), Style::default().fg(rssi_color)),
             Span::styled(
+                // Bare number: the column is headed CH, so repeating the
+                // prefix on every row costs two characters and says nothing.
                 format!(
-                    " {:<5}",
-                    rf.channel.map(|c| format!("ch{c}")).unwrap_or_default()
+                    "{:>5}  ",
+                    rf.channel.map(|c| c.to_string()).unwrap_or_default()
                 ),
                 Style::default().fg(DIM),
             ),

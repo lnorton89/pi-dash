@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 use super::gauge;
-use super::{field, pane_block, threshold_color, BAD, DIM, OK, WARN};
+use super::{field, pane_block, push_if_fits, threshold_color, BAD, DIM, GUTTER, OK, WARN};
 use crate::app::App;
 use crate::format::{human_kb, human_rate};
 use crate::panes::health::{
@@ -17,12 +17,16 @@ use crate::panes::health::{
 };
 
 /// Lines this pane writes, and therefore the height the layout pins it to:
-/// temp, power, throttle-now, throttle-since-boot, disk, io, api freshness.
+/// temp, volts, clock, throttle-now, throttle-since-boot, disk, io, api.
 /// It is a constant rather than a measurement because the pane is laid out
 /// before its content exists, and because a pane whose height changed with
 /// its contents would shove the two panes under it around every time the
 /// supply sagged.
-pub const CONTENT_ROWS: u16 = 7;
+pub const CONTENT_ROWS: u16 = 8;
+
+/// The column every row right-aligns its value into, before its meter. Wide
+/// enough for `0.850V`, `117.0G` and a four-digit clock.
+const VALUE_W: usize = 6;
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let block = pane_block(" Pi health ", app.accent, app.glyphs);
@@ -33,6 +37,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     let health = &app.health;
+    let width = inner.width as usize;
+    // Every meter in this pane is the same width and starts at the same
+    // column, so the bars form one vertical band and the figures after them
+    // line up. Sizing each row to its own value put the four meters at four
+    // different columns and made the pane read as a ragged list.
+    let meter = (width / 4).clamp(8, 12);
+    let meter_at = GUTTER + VALUE_W + 1;
+    let value = |text: String| {
+        Span::styled(
+            format!("{text:>VALUE_W$} "),
+            Style::default().add_modifier(Modifier::BOLD),
+        )
+    };
     let mut lines: Vec<Line> = Vec::new();
 
     // ── temperature ──
@@ -40,51 +57,87 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         "temp",
         match health.temp_c {
             Some(temp) => {
-                let mut spans = vec![
-                    Span::styled(
-                        format!("{temp:>4.1}C"),
-                        Style::default()
-                            .fg(threshold_color(temp, TEMP_WARN_C, TEMP_HOT_C))
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::raw(" "),
-                ];
+                let mut spans = vec![Span::styled(
+                    format!("{:>VALUE_W$} ", format!("{temp:.1}C")),
+                    Style::default()
+                        .fg(threshold_color(temp, TEMP_WARN_C, TEMP_HOT_C))
+                        .add_modifier(Modifier::BOLD),
+                )];
                 // The same gradient meter the system pane uses, over the
                 // throttle window rather than over 0-100: an SoC temperature
                 // is only meaningful against the point it starts throttling
                 // at, and "68% of nothing in particular" is not actionable.
                 spans.extend(gauge::bar(
                     (temp - TEMP_METER_LO) / (TEMP_METER_HI - TEMP_METER_LO),
-                    12,
+                    meter,
                     app.glyphs,
                     gauge::Ramp::Load,
                 ));
-                spans.push(Span::styled(
-                    format!("  {TEMP_METER_LO:.0}-{TEMP_METER_HI:.0}"),
-                    Style::default().fg(DIM),
-                ));
+                let mut used = meter_at + meter;
+                // The range is the throttle window, not 0-100, so it has to
+                // say so: a bare 30-85 beside a bar is a pair of numbers with
+                // no stated meaning.
+                push_if_fits(
+                    &mut spans,
+                    &mut used,
+                    width,
+                    format!("  {TEMP_METER_LO:.0}-{TEMP_METER_HI:.0}C"),
+                );
+                push_if_fits(
+                    &mut spans,
+                    &mut used,
+                    width,
+                    format!("  {:.0}C to throttle", (TEMP_HOT_C - temp).max(0.0)),
+                );
                 spans
             }
             None => vec![Span::styled("no thermal zone", Style::default().fg(DIM))],
         },
     ));
 
-    // ── power and clock ──
-    let volts = match health.volts {
-        Some(v) => format!("{v:.4}V core"),
-        None => "?V core".to_string(),
-    };
-    let clock = match (health.arm_mhz, health.max_mhz) {
-        (Some(now), Some(max)) => format!("clock {now}/{max} MHz"),
-        (Some(now), None) => format!("clock {now} MHz"),
-        _ => "clock ?".to_string(),
-    };
+    // ── core voltage ──
+    //
+    // Its own row rather than sharing one with the clock. They are unrelated
+    // measurements, and putting them together meant neither had a label in the
+    // gutter — the row read as an undifferentiated run of numbers.
     lines.push(field(
-        "power",
-        vec![
-            Span::raw(volts),
-            Span::styled(format!("   {clock}"), Style::default().fg(DIM)),
-        ],
+        "volts",
+        match health.volts {
+            Some(v) => vec![
+                value(format!("{v:.3}V")),
+                Span::styled("core", Style::default().fg(DIM)),
+            ],
+            None => vec![Span::styled(
+                "unavailable - no vcgencmd",
+                Style::default().fg(DIM),
+            )],
+        },
+    ));
+
+    // ── ARM clock ──
+    lines.push(field(
+        "clock",
+        match (health.arm_mhz, health.max_mhz) {
+            (Some(now), Some(max)) if max > 0 => {
+                let frac = now as f64 / max as f64;
+                let mut spans = vec![value(now.to_string())];
+                // Cool, not load: a Pi clocked down is the governor idling,
+                // which is the opposite of a problem. What you are watching for
+                // is a clock pinned low while the box is busy, and that reads
+                // off the bar's length either way.
+                spans.extend(gauge::bar(frac, meter, app.glyphs, gauge::Ramp::Cool));
+                let mut used = meter_at + meter;
+                push_if_fits(
+                    &mut spans,
+                    &mut used,
+                    width,
+                    format!(" {:>3.0}%  of {max} MHz", frac * 100.0),
+                );
+                spans
+            }
+            (Some(now), _) => vec![Span::raw(format!("{now} MHz"))],
+            _ => vec![Span::styled("unavailable", Style::default().fg(DIM))],
+        },
     ));
 
     // ── the reason this pane exists ──
@@ -94,28 +147,52 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     lines.push(field(
         "disk",
         match health.disk {
-            Some(disk) => vec![
-                Span::raw(format!(
-                    "{}/{}",
-                    human_kb(disk.used_kb),
-                    human_kb(disk.total_kb)
-                )),
-                Span::styled(
-                    format!("  {:.0}%", disk.pct()),
-                    Style::default().fg(threshold_color(disk.pct(), 80.0, 92.0)),
-                ),
-            ],
-            None => vec![Span::styled("unavailable", Style::default().fg(DIM))],
+            Some(disk) => {
+                let pct = disk.pct();
+                let mut spans = vec![value(human_kb(disk.used_kb))];
+                spans.extend(gauge::bar(
+                    pct / 100.0,
+                    meter,
+                    app.glyphs,
+                    gauge::Ramp::Load,
+                ));
+                spans.push(Span::styled(
+                    format!(" {pct:>3.0}%"),
+                    Style::default().fg(threshold_color(pct, 80.0, 92.0)),
+                ));
+                let mut used = meter_at + meter + 5;
+                // Free is the number you act on. "26% used" and "86G free"
+                // answer different questions, and on a Pi about to write an
+                // image it is the second one.
+                push_if_fits(
+                    &mut spans,
+                    &mut used,
+                    width,
+                    format!(
+                        "  {} free of {}",
+                        human_kb(disk.total_kb.saturating_sub(disk.used_kb)),
+                        human_kb(disk.total_kb)
+                    ),
+                );
+                spans
+            }
+            None => vec![Span::styled(
+                "unavailable - df did not run",
+                Style::default().fg(DIM),
+            )],
         },
     ));
 
+    // Fixed-width so the two rates sit in columns, rather than the write
+    // figure shifting every time the read one crosses a power of 1024.
     lines.push(field(
         "io",
-        vec![Span::raw(format!(
-            "r {}   w {}",
-            human_rate(health.io.read_bps),
-            human_rate(health.io.write_bps)
-        ))],
+        vec![
+            Span::styled("read ", Style::default().fg(DIM)),
+            Span::raw(format!("{:<11}", human_rate(health.io.read_bps))),
+            Span::styled("write ", Style::default().fg(DIM)),
+            Span::raw(human_rate(health.io.write_bps)),
+        ],
     ));
 
     lines.push(field(
