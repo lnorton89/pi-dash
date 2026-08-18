@@ -21,6 +21,11 @@ use super::{page_size, read_trimmed};
 /// history and 4 kB of f64, which is not a number worth tuning.
 pub const HISTORY_LEN: usize = 480;
 
+/// Per-core samples kept for the sparkline beside each core meter. Far shorter
+/// than the aggregate window: the sparkline is a handful of columns wide, and
+/// on a 16-core box this is sixteen of them.
+pub const CORE_HISTORY_LEN: usize = 64;
+
 /// `/proc` reports CPU time in USER_HZ, which Linux fixes at 100 for the
 /// procfs ABI regardless of the kernel's internal CONFIG_HZ. The aggregate
 /// percentages cancel it out; the per-process ones do not, so it is named.
@@ -239,7 +244,7 @@ pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
 }
 
 /// One row of the process table.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ProcRow {
     pub pid: i32,
     pub name: String,
@@ -248,6 +253,10 @@ pub struct ProcRow {
     /// legitimately read 380% on a Pi 4.
     pub cpu_pct: f64,
     pub rss_kb: u64,
+    /// The full argument vector, space-joined. Empty for a kernel thread,
+    /// which has no `cmdline` at all, and empty for every row the pane was
+    /// never going to show — see [`SystemPane::sample`].
+    pub cmdline: String,
 }
 
 /// Turns two `/proc/<pid>/stat` samples into a sorted process table.
@@ -280,6 +289,7 @@ pub fn process_rows(
                 state: stat.state,
                 cpu_pct,
                 rss_kb: stat.rss_pages.saturating_mul(page_bytes) / 1024,
+                cmdline: String::new(),
             }
         })
         .collect();
@@ -312,6 +322,8 @@ pub struct SystemPane {
     /// never had.
     pub cpu_history: Vec<f64>,
     pub core_pct: Vec<Option<f64>>,
+    /// One short history per core, in core order, for the sparklines.
+    pub core_history: Vec<Vec<f64>>,
     pub mem: MemInfo,
     pub load: [f64; 3],
     pub runnable: u64,
@@ -333,6 +345,7 @@ impl Default for SystemPane {
             cpu_pct: None,
             cpu_history: Vec::with_capacity(HISTORY_LEN),
             core_pct: Vec::new(),
+            core_history: Vec::new(),
             mem: MemInfo::default(),
             load: [0.0; 3],
             runnable: 0,
@@ -345,18 +358,6 @@ impl Default for SystemPane {
 }
 
 impl SystemPane {
-    /// Appends one reading, dropping the oldest once the window is full.
-    /// A `Vec` shift of a few hundred f64 once per sample is cheaper than the
-    /// `make_contiguous` a `VecDeque` would need on every frame to hand the
-    /// graph a slice — the read side runs far more often than the write side.
-    fn push_history(&mut self, frac: f64) {
-        if self.cpu_history.len() >= HISTORY_LEN {
-            let excess = self.cpu_history.len() + 1 - HISTORY_LEN;
-            self.cpu_history.drain(..excess);
-        }
-        self.cpu_history.push(frac.clamp(0.0, 1.0));
-    }
-
     pub fn sample(&mut self, now: Instant) {
         let Some(stat) = read_trimmed("/proc/stat") else {
             self.unavailable = Some("/proc/stat is not readable — not a Linux box?".to_string());
@@ -368,7 +369,7 @@ impl SystemPane {
         if let (Some(current), Some(prev)) = (aggregate, self.prev_aggregate) {
             self.cpu_pct = current.usage_since(&prev);
             if let Some(pct) = self.cpu_pct {
-                self.push_history(pct / 100.0);
+                push_bounded(&mut self.cpu_history, pct / 100.0, HISTORY_LEN);
             }
         }
         self.core_pct = cores
@@ -380,6 +381,13 @@ impl SystemPane {
                     .and_then(|prev| current.usage_since(prev))
             })
             .collect();
+        // A core count can change under you — CPU hotplug, or `maxcpus` on a
+        // kernel command line after a reboot. Resize rather than index blind.
+        self.core_history.resize(self.core_pct.len(), Vec::new());
+        for (history, pct) in self.core_history.iter_mut().zip(&self.core_pct) {
+            let Some(pct) = pct else { continue };
+            push_bounded(history, pct / 100.0, CORE_HISTORY_LEN);
+        }
         self.prev_aggregate = aggregate;
         self.prev_cores = cores;
 
@@ -415,9 +423,49 @@ impl SystemPane {
         let stats = read_process_stats();
         if elapsed > Duration::ZERO {
             self.procs = process_rows(&stats, &self.prev_proc_ticks, elapsed, self.page_bytes);
+            // Command lines are read only for the rows that could be drawn,
+            // and only after the sort has decided which those are. Reading
+            // /proc/<pid>/cmdline for all four hundred processes would double
+            // the pane's file reads every tick to fill in three hundred rows
+            // that are below the fold.
+            for row in self.procs.iter_mut().take(CMDLINE_ROWS) {
+                row.cmdline = read_cmdline(row.pid).unwrap_or_default();
+            }
         }
         self.prev_proc_ticks = stats.iter().map(|s| (s.pid, s.cpu_ticks)).collect();
     }
+}
+
+/// Appends one reading, dropping the oldest once the window is full.
+///
+/// A `Vec` shift of a few hundred f64 once per sample is cheaper than the
+/// `make_contiguous` a `VecDeque` would need on every frame to hand the graph
+/// a contiguous slice — the read side runs far more often than the write side.
+fn push_bounded(history: &mut Vec<f64>, frac: f64, cap: usize) {
+    if history.len() >= cap {
+        let excess = history.len() + 1 - cap;
+        history.drain(..excess);
+    }
+    history.push(frac.clamp(0.0, 1.0));
+}
+
+/// Rows deep enough to cover any pane a Pi is plugged into, and no deeper.
+const CMDLINE_ROWS: usize = 80;
+
+/// The full argument vector of one process.
+///
+/// `/proc/<pid>/cmdline` is NUL-separated with a trailing NUL, not
+/// space-separated: splitting on whitespace instead would silently join an
+/// argument that contains a space to the next one. Kernel threads have an
+/// empty file, which is how they are told apart from userspace here.
+fn read_cmdline(pid: i32) -> Option<String> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let text = String::from_utf8_lossy(&raw)
+        .split(' ')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!text.is_empty()).then_some(text)
 }
 
 /// Walks `/proc` once per sample. Reading a few hundred small files costs
@@ -530,7 +578,7 @@ ctxt 999
     fn history_keeps_the_newest_samples_and_stays_bounded() {
         let mut pane = SystemPane::default();
         for i in 0..HISTORY_LEN + 50 {
-            pane.push_history(i as f64 / 10_000.0);
+            push_bounded(&mut pane.cpu_history, i as f64 / 10_000.0, HISTORY_LEN);
         }
         assert_eq!(pane.cpu_history.len(), HISTORY_LEN);
         // The window slid: the newest reading is last, the oldest 50 are gone.
@@ -545,8 +593,8 @@ ctxt 999
     #[test]
     fn history_never_stores_a_value_outside_the_graph_range() {
         let mut pane = SystemPane::default();
-        pane.push_history(-1.0);
-        pane.push_history(4.0);
+        push_bounded(&mut pane.cpu_history, -1.0, HISTORY_LEN);
+        push_bounded(&mut pane.cpu_history, 4.0, HISTORY_LEN);
         assert_eq!(pane.cpu_history, vec![0.0, 1.0]);
     }
 
@@ -608,6 +656,15 @@ SwapFree:         512000 kB
         assert!(parse_pid_stat("").is_none());
         assert!(parse_pid_stat("not a stat line").is_none());
         assert!(parse_pid_stat("1234 (short) S 1").is_none());
+    }
+
+    #[test]
+    fn a_kernel_thread_has_no_command_line_rather_than_a_bogus_one() {
+        // Nothing on a dev machine has this pid; the point is that an
+        // unreadable or empty cmdline is None, never an empty-looking String
+        // that renders as a blank column.
+        assert!(read_cmdline(-1).is_none());
+        assert!(read_cmdline(i32::MAX).is_none());
     }
 
     fn stat_of(pid: i32, comm: &str, ticks: u64, rss_pages: u64) -> PidStat {

@@ -122,6 +122,7 @@ fn with_load(app: &mut App) {
             state: 'R',
             cpu_pct: 88.0,
             rss_kb: 482_000,
+            cmdline: "/usr/bin/node /usr/lib/node_modules/npm/bin/npm-cli.js ci".to_string(),
         },
         ProcRow {
             pid: 68_260,
@@ -129,6 +130,7 @@ fn with_load(app: &mut App) {
             state: 'D',
             cpu_pct: 47.0,
             rss_kb: 6_000,
+            cmdline: "/usr/bin/dump1090-mutability --net --quiet".to_string(),
         },
     ];
 }
@@ -277,6 +279,40 @@ fn no_system_pane_label_is_ever_sliced_by_the_pane_edge() {
             }
         }
     }
+}
+
+#[test]
+fn adjacent_process_columns_never_run_into_each_other() {
+    // A name that exactly fills its column used to touch the command line
+    // beside it: `dump1090-mutabilit/usr/bin/dump1090-mutability --net`.
+    let mut app = test_app();
+    with_load(&mut app);
+    // Filler chosen so the pair cannot occur anywhere else on screen — `ab`
+    // matched the footer's own "tab/1-4 pane".
+    app.system.procs[0].name = "W".repeat(40);
+    app.system.procs[0].cmdline = "Z".repeat(60);
+    app.focus = Pane::System;
+
+    for width in 40..200u16 {
+        for row in render(&mut app, width, 30) {
+            assert!(!row.contains("WZ"), "columns touch at width {width}: {row}");
+        }
+    }
+}
+
+#[test]
+fn a_kernel_thread_is_bracketed_rather_than_left_blank() {
+    let mut app = test_app();
+    with_load(&mut app);
+    app.system.procs[1].name = "kworker/0:1".to_string();
+    app.system.procs[1].cmdline = String::new();
+    app.focus = Pane::System;
+    let rows = render(&mut app, 160, 30);
+    assert!(
+        contains(&rows, "[kworker/0:1]"),
+        "an empty cmdline must read as a kernel thread, not a failed read:\n{}",
+        rows.join("\n")
+    );
 }
 
 #[test]

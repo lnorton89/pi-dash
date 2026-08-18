@@ -5,31 +5,30 @@ A one-window terminal dashboard for the Raspberry Pi running
 you, plus a system summary so you do not need one.
 
 ```
- pi-dash  classg-pi  127.0.0.1:8081                                                        17:38:30
-┌ System ─────────────────────────────── up 3d4h5m ┐┌ Pi health ───────────────────────────────────┐
-│         ⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  temp   58.4C ██████▎░░░░░  30-85            │
-│         ⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⣴⣿⡇⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  power  0.8563V core   clock 1500/1800 MHz   │
-│         ⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⣿⣿⡇⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  thrott OK  nothing right now                │
-│         ⡀⡀⡀⢀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⣿⣿⡇⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  since  under-voltage, throttled  (0x50000)  │
-│         ⢀⣤⣾⣿⣿⣦⣄⡀⡀⢀⣀⡀⡀⡀⡀⡀⡀⣿⣿⣧⣤⣤⣤⣶⣿⣷⣦⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⢀⣴⣿ ││  disk   21.0G/56.0G  38%                     │
-│         ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⣀⣤⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣴⣶⣿⣿⣶⣶⣶⣿⣿⣿ ││  io     r 0 B/s   w 84.0 KB/s                │
-│  cpu    ███▉░░░░░░░░░░░░  24%  4 cores           ││  api    no successful poll yet               │
-│  c0  ██▉░░░░░░░░░░  22%  c1  █▉░░░░░░░░░░░  14%  │└──────────────────────────────────────────────┘
-│  c2  █████▍░░░░░░░  41%  c3  █▏░░░░░░░░░░░   9%  │┌ Radios & network ────────────────────────────┐
-│  mem    ██████▏░░░░░░░░░  38%  2.9G/7.6G         ││  wlan1   up   v1.2M   ^0B     monitor ch6    │
-│  cache  ████▏░░░░░░░░░░░  26%  1.9G reclaimable  ││  eth0    up   v4.0K   ^2.0K                  │
-│  swap   off   214 tasks, 2 running               ││                                              │
-│                                                  ││  USB radios                                  │
-│  PID     COMMAND                    MEM    CPU%  ││  0e8d:7961  MediaTek ALFA AWUS036AXML        │
-│  1284    classg-api                120M    41.2  ││  0bda:2838  Realtek RTL2838 (RTL-SDR V4)     │
-│  1290    classg_wifi                64M    18.7  │└──────────────────────────────────────────────┘
-│  1301    classg-fusion               9M     4.1  │┌ ClassG  127.0.0.1:8081 ──────────────────────┐
-│  902     dockerd                   206M     1.4  ││  ok   up 75h 25m   0.4.1                     │
-│                                                  ││  sensors                                     │
-│                                                  ││   wifi-1     wifi ok      1s 5m:12           │
-│                                                  ││   sdr-1      sdr  ok      2s 5m:0            │
-└──────────────────────────────────────────────────┘└──────────────────────────────────────────────┘
-                                   q quit · r refresh now · ? help
+ pi-dash  classg-pi  127.0.0.1:8081                                                                                    21:28:27
+┌ System ────────────────────────────────────────────────────── up 3d4h5m ┐┌ Pi health ────────────────────────────────────────┐
+│                                        CPU ███▍░░░░░░░░░░  24%          ││  temp   58.4C ██████▎░░░░░  30-85                 │
+│                      ⣤⣶⣶               c0  ███▏░░░░░░░░░░  22%  ⣀⣀⣀⣀⣀⣀⣠⣤││  power  0.8563V core   clock 1500/1800 MHz        │
+│                      ⣿⣿⣿               c1  ██░░░░░░░░░░░░  14%  ⣀⣀⣀⣀⣤⣤⣤⣀││  thrott OK  nothing right now                     │
+│                      ⣿⣿⣿               c2  █████▊░░░░░░░░  41%  ⣀⣠⣤⣤⣄⣀⣀⣀││  since  under-voltage, throttled  (0x50000)       │
+│  ⣿⣷⣦⡀         ⢀⣴⣿⣿⣷⣤⣀⣿⣿⣿⣀     ⢀⣀⣀⣀⣀⣠⣴  c3  █▎░░░░░░░░░░░░   9%  ⣤⣤⣀⣀⣀⣀⣀⣀││  disk   21.0G/56.0G  38%                          │
+│  ⣿⣿⣿⣿⣦⣤⣴⣶⣿⣿⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣤⣀⣠⣴⣿⣿⣿⣿⣿⣿⣿  load 0.52 0.31 0.20              ││  io     r 0 B/s   w 84.0 KB/s                     │
+│  mem    █████████▏░░░░░░░░░░░░░░  38%  2.9G/7.6G                        ││  api    no successful poll yet                    │
+│  cache  ██████▏░░░░░░░░░░░░░░░░░  26%  1.9G reclaimable                 │└───────────────────────────────────────────────────┘
+│  swap   off   214 tasks, 2 running                                      │┌ Radios & network ─────────────────────────────────┐
+│                                                                         ││  wlan1   up   v1.2M   ^0B     monitor ch6         │
+│  PID     COMMAND                                 MEM    CPU%            ││  eth0    up   v4.0K   ^2.0K                       │
+│  1284    classg-api                             120M    41.2 ████▏░░░░░ ││                                                   │
+│  1290    classg_wifi                             64M    18.7 █▉░░░░░░░░ ││  USB radios                                       │
+│  1301    classg-fusion                            9M     4.1 ▍░░░░░░░░░ ││  0e8d:7961  MediaTek ALFA AWUS036AXML             │
+│  902     dockerd                                206M     1.4 ▏░░░░░░░░░ ││  0bda:2838  Realtek RTL2838 (RTL-SDR V4)          │
+│  61      kworker/1:2-events                        0     0.4 ▏░░░░░░░░░ │└───────────────────────────────────────────────────┘
+│                                                                         │┌ ClassG  127.0.0.1:8081 ───────────────────────────┐
+│                                                                         ││  ok   up 75h 25m   0.4.1                          │
+│                                                                         ││  sensors                                          │
+│                                                                         ││   wifi-1     wifi ok      1s 5m:12                │
+└─────────────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────┘
+                                                 q quit · r refresh now · ? help
 ```
 
 It is a Rust rewrite of `classg/scripts/pi-dash.sh`, which orchestrated tmux
@@ -56,7 +55,7 @@ which is also what makes the binary runnable on a dev machine that is not a Pi.
 
 | Pane | What |
 |---|---|
-| **system** | CPU history graph, aggregate and per-core meters, memory and reclaimable cache, swap, load, task counts, and the busiest processes, from `/proc/stat`, `/proc/meminfo`, `/proc/<pid>/stat` |
+| **system** | CPU history graph beside per-core meters and sparklines, memory and reclaimable cache, swap, load, task counts, and the busiest processes with their command lines, from `/proc/stat`, `/proc/meminfo`, `/proc/<pid>/stat` |
 | **health** | temperature, core voltage, ARM clock, **decoded throttle bits**, disk, I/O |
 | **radios** | per-interface throughput from `/proc/net/dev`, monitor-mode state, USB radio presence |
 | **classg** | `GET /api/v1/health`, `/tracks`, `/detections` — degraded, never fatal |
@@ -64,18 +63,26 @@ which is also what makes the binary runnable on a dev machine that is not a Pi.
 ### Why the system pane looks like btop
 
 Because that is the pane btop used to occupy, and the layout is the one the
-muscle memory is for: a scrolling history graph over a gradient meter, per-core
-meters in a grid, then the memory split, then the busiest processes. Meters
-fill at eighth-of-a-cell precision and colour green→amber→red *by position*,
-so where a bar ends reads without stopping to parse the number next to it.
+muscle memory is for. It is btop's CPU box: a scrolling history graph on the
+left, the per-core column on the right, each core with its own meter and
+sparkline, the load average under them. Then the memory split, then the
+process table.
+
+Meters fill at eighth-of-a-cell precision and colour *by position* along the
+bar, so where one ends reads without stopping to parse the number beside it.
+The ramp is green→amber→red for anything where more is worse, and blue→cyan
+for reclaimable page cache — which is not a warning at any level, and looked
+like one when it shared the load ramp.
 
 The history graph earns its rows on its own: a Pi pinned at 100% and a Pi that
 spikes to 100% once a minute show the same instant number and are completely
 different problems. Braille packs two samples per column and four levels per
-row, so the graph holds roughly four minutes at the default cadence.
+row. Everything above the trace is blank, with a floor on the bottom row —
+a dim character at every level turns the pane into graph paper and loses the
+one row that carries the data.
 
 None of this is a btop reimplementation — no tree view, no process management,
-no per-core history.
+no disk or network boxes.
 
 #### On the Pi's own HDMI console
 

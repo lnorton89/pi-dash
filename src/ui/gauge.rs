@@ -151,55 +151,122 @@ fn depth() -> Depth {
     })
 }
 
-/// Green at `0.0`, amber in the middle, red at `1.0`. Out of range clamps.
-pub fn ramp(t: f64) -> Color {
-    ramp_at(depth(), t)
+/// What a full bar *means*, which is not the same question as how full it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Ramp {
+    /// Green → amber → red. Anything where more is worse.
+    #[default]
+    Load,
+    /// Blue → cyan. Anything where a full bar is fine.
+    ///
+    /// Page cache is the case that forced this. It is reclaimable memory, so a
+    /// Pi with 62% of RAM in cache is a Pi using its RAM well — and drawing
+    /// that on the load ramp put a wide amber bar directly under the memory
+    /// meter, which reads as a box about to run out of memory.
+    Cool,
 }
 
-pub fn ramp_at(depth: Depth, t: f64) -> Color {
+/// The unfilled part of a meter, and the floor of a graph.
+///
+/// Deliberately darker than [`DIM`]. At `DarkGray` the empty two thirds of a
+/// 24-cell meter rendered as a solid grey block that out-shouted the short
+/// green fill in front of it — the eye went to the part that carried no
+/// information.
+pub fn track() -> Color {
+    match depth() {
+        Depth::Cube256 => Color::Indexed(236),
+        // The 16-colour console has nothing between black and DarkGray, so the
+        // track stays as it was there.
+        Depth::Ansi16 => Color::DarkGray,
+    }
+}
+
+/// Background for every other process row, or `None` where the palette has no
+/// shade dark enough to stripe with without becoming a highlight.
+pub fn row_shade() -> Option<Color> {
+    match depth() {
+        Depth::Cube256 => Some(Color::Indexed(234)),
+        Depth::Ansi16 => None,
+    }
+}
+
+/// The colour at `t` along `ramp`. Out of range clamps.
+pub fn ramp(ramp: Ramp, t: f64) -> Color {
+    ramp_at(depth(), ramp, t)
+}
+
+pub fn ramp_at(depth: Depth, ramp: Ramp, t: f64) -> Color {
     let t = if t.is_finite() {
         t.clamp(0.0, 1.0)
     } else {
         0.0
     };
-    match depth {
-        Depth::Cube256 => {
-            // Walk the 6×6×6 cube's green edge round to its red one: green up
-            // to yellow, yellow down to red. Eleven stops, which across a 16-
-            // to 40-cell meter is smooth enough that the steps do not show.
-            const STOPS: [(u8, u8); 11] = [
-                (0, 5),
-                (1, 5),
-                (2, 5),
-                (3, 5),
-                (4, 5),
-                (5, 5),
-                (5, 4),
-                (5, 3),
-                (5, 2),
-                (5, 1),
-                (5, 0),
-            ];
-            let index = ((t * (STOPS.len() - 1) as f64).round() as usize).min(STOPS.len() - 1);
-            let (r, g) = STOPS[index];
-            // Cube index is 16 + 36r + 6g + b, each component 0..=5.
-            Color::Indexed(16 + 36 * r + 6 * g)
-        }
-        Depth::Ansi16 => {
-            // Dark yellow (colour 3) is left out on purpose: on most consoles
-            // it renders olive-brown, which reads as a dead column rather than
-            // as a step between green and red.
-            const STOPS: [Color; 5] = [
+    // Cube stops are (r, g, b) components, each 0..=5; the index is
+    // 16 + 36r + 6g + b. Walking an edge of the cube keeps the hue moving
+    // without the brightness lurching.
+    match (depth, ramp) {
+        // Green up to yellow, then yellow down to red. Eleven stops, which
+        // across a 16- to 40-cell meter is smooth enough not to show steps.
+        (Depth::Cube256, Ramp::Load) => cube(
+            &[
+                (0, 5, 0),
+                (1, 5, 0),
+                (2, 5, 0),
+                (3, 5, 0),
+                (4, 5, 0),
+                (5, 5, 0),
+                (5, 4, 0),
+                (5, 3, 0),
+                (5, 2, 0),
+                (5, 1, 0),
+                (5, 0, 0),
+            ],
+            t,
+        ),
+        // Blue round to cyan, staying cool the whole way so it never reads as
+        // a warning at any fill level.
+        (Depth::Cube256, Ramp::Cool) => cube(
+            &[
+                (0, 0, 3),
+                (0, 1, 4),
+                (0, 2, 5),
+                (0, 3, 5),
+                (0, 4, 5),
+                (0, 5, 5),
+            ],
+            t,
+        ),
+        // Dark yellow (colour 3) is left out on purpose: on most consoles it
+        // renders olive-brown, which reads as a dead column rather than as a
+        // step between green and red.
+        (Depth::Ansi16, Ramp::Load) => pick(
+            &[
                 Color::Green,
                 Color::LightGreen,
                 Color::LightYellow,
                 Color::LightRed,
                 Color::Red,
-            ];
-            let index = ((t * (STOPS.len() - 1) as f64).round() as usize).min(STOPS.len() - 1);
-            STOPS[index]
-        }
+            ],
+            t,
+        ),
+        (Depth::Ansi16, Ramp::Cool) => pick(
+            &[Color::Blue, Color::LightBlue, Color::Cyan, Color::LightCyan],
+            t,
+        ),
     }
+}
+
+fn cube(stops: &[(u8, u8, u8)], t: f64) -> Color {
+    let (r, g, b) = stops[index_into(stops.len(), t)];
+    Color::Indexed(16 + 36 * r + 6 * g + b)
+}
+
+fn pick(stops: &[Color], t: f64) -> Color {
+    stops[index_into(stops.len(), t)]
+}
+
+fn index_into(len: usize, t: f64) -> usize {
+    ((t * (len - 1) as f64).round() as usize).min(len - 1)
 }
 
 /// Collects same-styled characters into runs, so a 40-cell meter emits a
@@ -245,7 +312,7 @@ impl<'a> Runs<'a> {
 }
 
 /// A horizontal meter, gradient-filled, exactly `width` cells wide.
-pub fn bar<'a>(frac: f64, width: usize, glyphs: Glyphs) -> Vec<Span<'a>> {
+pub fn bar<'a>(frac: f64, width: usize, glyphs: Glyphs, role: Ramp) -> Vec<Span<'a>> {
     if width == 0 {
         return Vec::new();
     }
@@ -275,11 +342,11 @@ pub fn bar<'a>(frac: f64, width: usize, glyphs: Glyphs) -> Vec<Span<'a>> {
             cell as f64 / (width - 1) as f64
         };
         let (color, ch) = if cell < full {
-            (ramp(t), glyphs.full())
+            (ramp(role, t), glyphs.full())
         } else if cell == full && remainder > 0 {
-            (ramp(t), glyphs.partial(remainder))
+            (ramp(role, t), glyphs.partial(remainder))
         } else {
-            (DIM, glyphs.track())
+            (track(), glyphs.track())
         };
         runs.push(color, ch);
     }
@@ -304,7 +371,18 @@ const BRAILLE_RIGHT: [u8; 4] = [3, 4, 5, 7];
 ///
 /// Colour follows height, not the current value, so the same absolute load is
 /// always the same colour.
-pub fn area_graph<'a>(samples: &[f64], width: usize, rows: usize, glyphs: Glyphs) -> Vec<Line<'a>> {
+///
+/// Everything above the trace is blank. Filling it with a dim character, which
+/// is what the first cut did, turns the pane into graph paper — six rows of
+/// dots at every level, with the one row of real data lost inside them. Only
+/// the bottom row keeps a floor, so an idle graph is still visibly a graph.
+pub fn area_graph<'a>(
+    samples: &[f64],
+    width: usize,
+    rows: usize,
+    glyphs: Glyphs,
+    role: Ramp,
+) -> Vec<Line<'a>> {
     if width == 0 || rows == 0 {
         return Vec::new();
     }
@@ -339,7 +417,8 @@ pub fn area_graph<'a>(samples: &[f64], width: usize, rows: usize, glyphs: Glyphs
         .map(|row| {
             // Rows run top-down; levels run bottom-up.
             let from_bottom = rows - 1 - row;
-            let lit = ramp((from_bottom as f64 + 0.5) / rows as f64);
+            let lit = ramp(role, (from_bottom as f64 + 0.5) / rows as f64);
+            let floor = from_bottom == 0;
             let mut runs = Runs::new();
 
             for cell in 0..width {
@@ -361,10 +440,10 @@ pub fn area_graph<'a>(samples: &[f64], width: usize, rows: usize, glyphs: Glyphs
                             }
                         }
                         // U+2800 is blank braille and every pattern is an
-                        // offset from it. A truly blank cell would punch a hole
-                        // in the graph, so nothing-lit falls back to the track.
+                        // offset from it. U+28C0 is both bottom dots, which
+                        // draws as a continuous floor rather than a dashed one.
                         if bits == 0 {
-                            (DIM, '⡀')
+                            (track(), if floor { '\u{28C0}' } else { ' ' })
                         } else {
                             (lit, char::from_u32(0x2800 + bits as u32).unwrap_or('⣿'))
                         }
@@ -377,7 +456,7 @@ pub fn area_graph<'a>(samples: &[f64], width: usize, rows: usize, glyphs: Glyphs
                             // it a six-row ASCII graph has six distinguishable
                             // heights and every shape looks like a staircase.
                             Some(level) if level > base => (lit, '-'),
-                            _ => (DIM, '.'),
+                            _ => (track(), if floor { '.' } else { ' ' }),
                         }
                     }
                 };
@@ -388,6 +467,70 @@ pub fn area_graph<'a>(samples: &[f64], width: usize, rows: usize, glyphs: Glyphs
         .collect()
 }
 
+/// A one-row filled graph, for the per-core column.
+///
+/// Braille gives four levels in a single row, which is enough to tell a core
+/// that is pinned from one that is bursting — which is the whole question the
+/// per-core column exists to answer. Colour follows each column's own value
+/// rather than its height, because in a one-row graph height carries no
+/// information to follow.
+pub fn sparkline<'a>(samples: &[f64], width: usize, glyphs: Glyphs, role: Ramp) -> Vec<Span<'a>> {
+    if width == 0 {
+        return Vec::new();
+    }
+    if glyphs == Glyphs::Ascii {
+        // No four-level ASCII character exists, so the console gets the
+        // area-graph row and its two levels rather than a worse invention.
+        let row = area_graph(samples, width, 1, glyphs, role);
+        return row.into_iter().next().map(|l| l.spans).unwrap_or_default();
+    }
+
+    let start = samples.len().saturating_sub(width * 2);
+    let visible = &samples[start..];
+    let pad = width * 2 - visible.len();
+    let mut runs = Runs::new();
+
+    for cell in 0..width {
+        let mut bits: u8 = 0;
+        let mut peak = 0.0f64;
+        for (half, dots) in [BRAILLE_LEFT, BRAILLE_RIGHT].into_iter().enumerate() {
+            let Some(value) = (cell * 2 + half)
+                .checked_sub(pad)
+                .and_then(|i| visible.get(i))
+                .map(|v| {
+                    if v.is_finite() {
+                        v.clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    }
+                })
+            else {
+                continue;
+            };
+            peak = peak.max(value);
+            let level = if value > 0.0 {
+                ((value * 4.0).round() as usize).clamp(1, 4)
+            } else {
+                0
+            };
+            for (offset, bit) in dots.iter().enumerate() {
+                if level > 3 - offset {
+                    bits |= 1 << bit;
+                }
+            }
+        }
+        if bits == 0 {
+            runs.push(track(), '\u{28C0}');
+        } else {
+            runs.push(
+                ramp(role, peak),
+                char::from_u32(0x2800 + bits as u32).unwrap_or('\u{28FF}'),
+            );
+        }
+    }
+    runs.finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +538,21 @@ mod tests {
     /// The visible characters of a span list, ignoring colour.
     fn text(spans: &[Span]) -> String {
         spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    /// Whether each cell of a row is lit data or unlit track, by colour.
+    ///
+    /// The floor glyph is `⣀`, which is also what a cell lit to one level of
+    /// four draws — no braille pattern is safe to reserve, because every one
+    /// of them is reachable from some combination of two samples. Colour is
+    /// the honest differentiator, and it is the one the eye actually uses.
+    fn lit_mask(line: &Line) -> Vec<bool> {
+        let mut mask = Vec::new();
+        for span in &line.spans {
+            let lit = span.style.fg != Some(track());
+            mask.extend(std::iter::repeat_n(lit, span.content.chars().count()));
+        }
+        mask
     }
 
     fn graph_text(lines: &[Line]) -> Vec<String> {
@@ -414,56 +572,76 @@ mod tests {
         for frac in [-1.0, 0.0, 0.37, 0.999, 1.0, 4.0, f64::NAN] {
             for glyphs in [Glyphs::Unicode, Glyphs::Ascii] {
                 assert_eq!(
-                    text(&bar(frac, 16, glyphs)).chars().count(),
+                    text(&bar(frac, 16, glyphs, Ramp::Load)).chars().count(),
                     16,
                     "frac {frac} in {glyphs:?}"
                 );
             }
         }
-        assert!(bar(0.5, 0, Glyphs::Unicode).is_empty());
+        assert!(bar(0.5, 0, Glyphs::Unicode, Ramp::Load).is_empty());
     }
 
     #[test]
     fn an_empty_bar_is_track_and_a_full_one_is_fill() {
-        assert_eq!(text(&bar(0.0, 8, Glyphs::Ascii)), "........");
-        assert_eq!(text(&bar(1.0, 8, Glyphs::Ascii)), "########");
-        assert_eq!(text(&bar(0.0, 4, Glyphs::Unicode)), "░░░░");
-        assert_eq!(text(&bar(1.0, 4, Glyphs::Unicode)), "████");
+        assert_eq!(text(&bar(0.0, 8, Glyphs::Ascii, Ramp::Load)), "........");
+        assert_eq!(text(&bar(1.0, 8, Glyphs::Ascii, Ramp::Load)), "########");
+        assert_eq!(text(&bar(0.0, 4, Glyphs::Unicode, Ramp::Load)), "░░░░");
+        assert_eq!(text(&bar(1.0, 4, Glyphs::Unicode, Ramp::Load)), "████");
     }
 
     #[test]
     fn a_partial_cell_lands_between_empty_and_full() {
         // Three and a half cells of eight.
-        assert_eq!(text(&bar(3.5 / 8.0, 8, Glyphs::Unicode)), "███▌░░░░");
+        assert_eq!(
+            text(&bar(3.5 / 8.0, 8, Glyphs::Unicode, Ramp::Load)),
+            "███▌░░░░"
+        );
         // ASCII has no half-cell, so it rounds at the middle rather than
         // dropping the remainder.
-        assert_eq!(text(&bar(3.5 / 8.0, 8, Glyphs::Ascii)), "####....");
-        assert_eq!(text(&bar(3.2 / 8.0, 8, Glyphs::Ascii)), "###.....");
+        assert_eq!(
+            text(&bar(3.5 / 8.0, 8, Glyphs::Ascii, Ramp::Load)),
+            "####...."
+        );
+        assert_eq!(
+            text(&bar(3.2 / 8.0, 8, Glyphs::Ascii, Ramp::Load)),
+            "###....."
+        );
     }
 
     #[test]
     fn a_small_but_non_zero_value_still_shows_something() {
         // 0.4% of a 16-cell bar is under a sixteenth of a cell. Rounding it
         // away makes a busy-but-quiet box look like a stopped sampler.
-        let drawn = text(&bar(0.004, 16, Glyphs::Unicode));
+        let drawn = text(&bar(0.004, 16, Glyphs::Unicode, Ramp::Load));
         assert!(drawn.starts_with('▏'), "got {drawn}");
         assert_eq!(
-            text(&bar(0.0, 16, Glyphs::Unicode)).chars().next(),
+            text(&bar(0.0, 16, Glyphs::Unicode, Ramp::Load))
+                .chars()
+                .next(),
             Some('░')
         );
     }
 
     #[test]
     fn the_ramp_runs_green_to_red_and_clamps() {
-        assert_eq!(ramp_at(Depth::Ansi16, 0.0), Color::Green);
-        assert_eq!(ramp_at(Depth::Ansi16, 1.0), Color::Red);
-        assert_eq!(ramp_at(Depth::Ansi16, -5.0), Color::Green);
-        assert_eq!(ramp_at(Depth::Ansi16, 5.0), Color::Red);
-        assert_eq!(ramp_at(Depth::Ansi16, f64::NAN), Color::Green);
+        assert_eq!(ramp_at(Depth::Ansi16, Ramp::Load, 0.0), Color::Green);
+        assert_eq!(ramp_at(Depth::Ansi16, Ramp::Load, 1.0), Color::Red);
+        assert_eq!(ramp_at(Depth::Ansi16, Ramp::Load, -5.0), Color::Green);
+        assert_eq!(ramp_at(Depth::Ansi16, Ramp::Load, 5.0), Color::Red);
+        assert_eq!(ramp_at(Depth::Ansi16, Ramp::Load, f64::NAN), Color::Green);
         // The ends of the cube's edge walk: pure green, then pure red.
-        assert_eq!(ramp_at(Depth::Cube256, 0.0), Color::Indexed(16 + 6 * 5));
-        assert_eq!(ramp_at(Depth::Cube256, 1.0), Color::Indexed(16 + 36 * 5));
-        assert_eq!(ramp_at(Depth::Cube256, 2.0), Color::Indexed(16 + 36 * 5));
+        assert_eq!(
+            ramp_at(Depth::Cube256, Ramp::Load, 0.0),
+            Color::Indexed(16 + 6 * 5)
+        );
+        assert_eq!(
+            ramp_at(Depth::Cube256, Ramp::Load, 1.0),
+            Color::Indexed(16 + 36 * 5)
+        );
+        assert_eq!(
+            ramp_at(Depth::Cube256, Ramp::Load, 2.0),
+            Color::Indexed(16 + 36 * 5)
+        );
     }
 
     #[test]
@@ -507,23 +685,32 @@ mod tests {
     fn a_graph_is_exactly_its_width_and_height() {
         let samples: Vec<f64> = (0..500).map(|i| (i % 100) as f64 / 100.0).collect();
         for glyphs in [Glyphs::Unicode, Glyphs::Ascii] {
-            let lines = area_graph(&samples, 20, 4, glyphs);
+            let lines = area_graph(&samples, 20, 4, glyphs, Ramp::Load);
             assert_eq!(lines.len(), 4);
             for line in graph_text(&lines) {
                 assert_eq!(line.chars().count(), 20, "{glyphs:?}: {line}");
             }
         }
-        assert!(area_graph(&samples, 0, 4, Glyphs::Unicode).is_empty());
-        assert!(area_graph(&samples, 20, 0, Glyphs::Unicode).is_empty());
+        assert!(area_graph(&samples, 0, 4, Glyphs::Unicode, Ramp::Load).is_empty());
+        assert!(area_graph(&samples, 20, 0, Glyphs::Unicode, Ramp::Load).is_empty());
     }
 
     #[test]
-    fn a_graph_with_no_samples_yet_draws_bare_track() {
+    fn a_graph_with_no_samples_yet_is_a_floor_and_nothing_else() {
+        // Only the bottom row draws. Filling every row with a dim character
+        // is what turned the pane into graph paper with the data lost inside.
         assert_eq!(
-            graph_text(&area_graph(&[], 6, 2, Glyphs::Ascii)),
-            ["......"; 2]
+            graph_text(&area_graph(&[], 6, 2, Glyphs::Ascii, Ramp::Load)),
+            ["      ", "......"]
         );
-        assert_eq!(graph_text(&area_graph(&[], 3, 1, Glyphs::Unicode)), ["⡀⡀⡀"]);
+        assert_eq!(
+            graph_text(&area_graph(&[], 3, 1, Glyphs::Unicode, Ramp::Load)),
+            ["\u{28C0}\u{28C0}\u{28C0}"]
+        );
+        // Blank rows are still exactly as wide as the graph.
+        for line in graph_text(&area_graph(&[], 9, 4, Glyphs::Unicode, Ramp::Load)) {
+            assert_eq!(line.chars().count(), 9, "{line:?}");
+        }
     }
 
     #[test]
@@ -532,7 +719,7 @@ mod tests {
         // data. Stretching two points across the pane would imply a history
         // that has not been collected yet.
         assert_eq!(
-            graph_text(&area_graph(&[1.0, 1.0], 6, 1, Glyphs::Ascii)),
+            graph_text(&area_graph(&[1.0, 1.0], 6, 1, Glyphs::Ascii, Ramp::Load)),
             ["....##"]
         );
     }
@@ -540,16 +727,17 @@ mod tests {
     #[test]
     fn a_full_column_fills_every_row_and_an_idle_one_fills_none() {
         assert_eq!(
-            graph_text(&area_graph(&[1.0; 8], 4, 3, Glyphs::Ascii)),
+            graph_text(&area_graph(&[1.0; 8], 4, 3, Glyphs::Ascii, Ramp::Load)),
             ["####"; 3]
         );
+        // Idle is blank above the floor, not a column of dots.
         assert_eq!(
-            graph_text(&area_graph(&[0.0; 8], 4, 3, Glyphs::Ascii)),
-            ["...."; 3]
+            graph_text(&area_graph(&[0.0; 8], 4, 3, Glyphs::Ascii, Ramp::Load)),
+            ["    ", "    ", "...."]
         );
         // Braille: a full column is the all-dots cell.
         assert_eq!(
-            graph_text(&area_graph(&[1.0; 8], 2, 2, Glyphs::Unicode)),
+            graph_text(&area_graph(&[1.0; 8], 2, 2, Glyphs::Unicode, Ramp::Load)),
             ["⣿⣿"; 2]
         );
     }
@@ -559,7 +747,7 @@ mod tests {
         // Three levels of a four-level (two-row) graph: one full row and a
         // half above it.
         assert_eq!(
-            graph_text(&area_graph(&[0.75; 4], 3, 2, Glyphs::Ascii)),
+            graph_text(&area_graph(&[0.75; 4], 3, 2, Glyphs::Ascii, Ramp::Load)),
             ["---", "###"]
         );
     }
@@ -567,9 +755,9 @@ mod tests {
     #[test]
     fn the_graph_fills_from_the_bottom_up() {
         // Half height in a four-row graph: the bottom two rows carry it.
-        let lines = graph_text(&area_graph(&[0.5; 8], 4, 4, Glyphs::Ascii));
-        assert_eq!(lines[0], "....", "the top row must be empty at 50%");
-        assert_eq!(lines[1], "....");
+        let lines = graph_text(&area_graph(&[0.5; 8], 4, 4, Glyphs::Ascii, Ramp::Load));
+        assert_eq!(lines[0], "    ", "the top row must be empty at 50%");
+        assert_eq!(lines[1], "    ");
         assert_eq!(lines[2], "####");
         assert_eq!(lines[3], "####");
     }
@@ -579,8 +767,21 @@ mod tests {
         // 1% over a 24-level braille graph rounds to zero levels, and an
         // apparently-idle graph on a box that is not idle is the one lie a
         // history graph must not tell.
-        let lines = graph_text(&area_graph(&[0.01; 16], 8, 6, Glyphs::Unicode));
-        assert_ne!(lines[5], "⡀".repeat(8), "the bottom row must show it");
-        assert_eq!(lines[4], "⡀".repeat(8), "nothing above it may light");
+        let busy = area_graph(&[0.01; 16], 8, 6, Glyphs::Unicode, Ramp::Load);
+        assert!(
+            lit_mask(&busy[5]).iter().all(|lit| *lit),
+            "the bottom row must be lit data, not floor"
+        );
+        assert!(
+            lit_mask(&busy[4]).iter().all(|lit| !*lit),
+            "nothing above it may light"
+        );
+
+        // And a genuinely idle box must not read as the busy one. Same glyph
+        // on the bottom row, different colour — which is the whole reason the
+        // floor and the data cannot be told apart by character.
+        let idle = area_graph(&[0.0; 16], 8, 6, Glyphs::Unicode, Ramp::Load);
+        assert_eq!(graph_text(&idle)[5], graph_text(&busy)[5]);
+        assert!(lit_mask(&idle[5]).iter().all(|lit| !*lit));
     }
 }

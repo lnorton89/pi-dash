@@ -57,6 +57,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                     (temp - TEMP_METER_LO) / (TEMP_METER_HI - TEMP_METER_LO),
                     12,
                     app.glyphs,
+                    gauge::Ramp::Load,
                 ));
                 spans.push(Span::styled(
                     format!("  {TEMP_METER_LO:.0}-{TEMP_METER_HI:.0}"),
