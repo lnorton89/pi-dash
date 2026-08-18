@@ -1,5 +1,8 @@
-//! Value formatting shared by every pane: byte rates, sizes, ages, and the
-//! ASCII meter.
+//! Value formatting shared by every pane: byte rates, sizes and ages.
+//!
+//! Meters and graphs are not here — they emit styled spans rather than
+//! strings, because a gradient is a property of the cells and not of the
+//! text. See [`crate::ui::gauge`].
 //!
 //! Everything here is deliberately narrow — fixed-width, no thousands
 //! separators, one decimal at most. The panes live in a ~46-column body and a
@@ -47,25 +50,6 @@ pub fn human_kb(kb: u64) -> String {
     } else {
         format!("{:.1}G", k / (1024.0 * 1024.0))
     }
-}
-
-/// `[####........]` over the range `lo..hi`.
-///
-/// A meter over an absolute range, not a percentage: an SoC temperature is
-/// only meaningful against the throttle points, and "68%" of nothing in
-/// particular is not a number anyone can act on. Out-of-range values clamp
-/// rather than overflow the width.
-pub fn meter(value: f64, lo: f64, hi: f64, width: usize) -> String {
-    if width == 0 || hi <= lo {
-        return String::new();
-    }
-    let frac = ((value - lo) / (hi - lo)).clamp(0.0, 1.0);
-    let fill = (frac * width as f64).round() as usize;
-    let mut out = String::with_capacity(width);
-    for i in 0..width {
-        out.push(if i < fill { '#' } else { '.' });
-    }
-    out
 }
 
 /// `12s` / `4m` / `2h` / `3d` — the age of something, at one significant unit.
@@ -141,18 +125,6 @@ mod tests {
         assert_eq!(human_kb(512), "512K");
         assert_eq!(human_kb(2048), "2M");
         assert_eq!(human_kb(3_145_728), "3.0G");
-    }
-
-    #[test]
-    fn meter_clamps_instead_of_overflowing_its_width() {
-        assert_eq!(meter(30.0, 30.0, 85.0, 10), "..........");
-        assert_eq!(meter(85.0, 30.0, 85.0, 10), "##########");
-        assert_eq!(meter(200.0, 30.0, 85.0, 10), "##########");
-        assert_eq!(meter(-40.0, 30.0, 85.0, 10), "..........");
-        assert_eq!(meter(57.5, 30.0, 85.0, 10).len(), 10);
-        // Degenerate ranges must not panic or divide by zero.
-        assert_eq!(meter(5.0, 10.0, 10.0, 8), "");
-        assert_eq!(meter(5.0, 0.0, 10.0, 0), "");
     }
 
     #[test]

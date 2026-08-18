@@ -20,7 +20,7 @@ use crate::panes::classg::{DetectionPage, FlexTime, HealthResponse, TrackPage};
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let title = format!(" ClassG  {} ", app.config.api.trim_start_matches("http://"));
-    let block = pane_block(&title, app.accent);
+    let block = pane_block(&title, app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {

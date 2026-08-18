@@ -65,6 +65,8 @@ pub struct DashSection {
     pub api_interval_secs: Option<f64>,
     /// Accent colour: any standard terminal colour name. Default `cyan`.
     pub theme: Option<String>,
+    /// `unicode` (default) or `ascii`. See [`crate::ui::gauge::Glyphs`].
+    pub glyphs: Option<String>,
     /// Rows of process table in the system pane. Default: fill the pane.
     pub processes: Option<usize>,
 }
@@ -85,6 +87,9 @@ pub struct Config {
     pub interval: std::time::Duration,
     pub api_interval: std::time::Duration,
     pub theme: String,
+    /// Character set for meters, graphs and borders. Parsed into
+    /// [`crate::ui::gauge::Glyphs`] once, at startup.
+    pub glyphs: String,
     pub processes: Option<usize>,
     pub usb_vendor_ids: Vec<String>,
     pub ignore_interfaces: Vec<String>,
@@ -99,6 +104,7 @@ impl Default for Config {
             interval: secs_to_duration(DEFAULT_INTERVAL_SECS),
             api_interval: secs_to_duration(DEFAULT_API_INTERVAL_SECS),
             theme: "cyan".to_string(),
+            glyphs: "unicode".to_string(),
             processes: None,
             usb_vendor_ids: DEFAULT_USB_VENDOR_IDS
                 .iter()
@@ -184,6 +190,9 @@ fn apply_file(config: &mut Config, file: ConfigFile) {
     }
     if let Some(theme) = file.dash.theme {
         config.theme = theme;
+    }
+    if let Some(glyphs) = file.dash.glyphs {
+        config.glyphs = glyphs;
     }
     if let Some(n) = file.dash.processes {
         config.processes = Some(n);

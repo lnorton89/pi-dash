@@ -14,7 +14,7 @@ use crate::format::{clip, human_rate_compact};
 use crate::panes::radios::WirelessMode;
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let block = pane_block(" Radios & network ", app.accent);
+    let block = pane_block(" Radios & network ", app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {

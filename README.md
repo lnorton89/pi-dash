@@ -5,19 +5,31 @@ A one-window terminal dashboard for the Raspberry Pi running
 you, plus a system summary so you do not need one.
 
 ```
- pi-dash  classg-pi  127.0.0.1:8081                                    14:05:50
-┌ System ─────────────────────────────────────┐┌ Pi health ───────────────────┐
-│  cpu    [####............]  24%  4 cores    ││  temp   58.4C [######......] │
-│  c0  [###...]  22%  c1  [##....]  14%       ││  power  0.8563V core   clock │
-│  c2  [#####.]  41%  c3  [#.....]   9%       ││  thrott OK  nothing right now│
-│  mem    [######..........]  38%  2.9G/7.6G  ││  since  under-voltage (0x5…) │
-│  swap   0   load 0.52 0.31 0.20  up 3d4h5m  ││  disk   21G/56G  38%         │
-│                                             ││  io     r 0 B/s   w 84 KB/s  │
-│  PID    CPU%       MEM  COMMAND             ││  api    last good poll 1s ago│
-│  1284   41.2      120M  classg-api          │└──────────────────────────────┘
-│  1290   18.7       64M  classg_wifi         │┌ Radios & network ────────────┐
-└─────────────────────────────────────────────┘│  wlan1  unkn v1.2M  ^0B  moni│
-                                                └──────────────────────────────┘
+ pi-dash  classg-pi  127.0.0.1:8081                                                        17:38:30
+┌ System ─────────────────────────────── up 3d4h5m ┐┌ Pi health ───────────────────────────────────┐
+│         ⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  temp   58.4C ██████▎░░░░░  30-85            │
+│         ⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⣴⣿⡇⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  power  0.8563V core   clock 1500/1800 MHz   │
+│         ⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⣿⣿⡇⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  thrott OK  nothing right now                │
+│         ⡀⡀⡀⢀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⣿⣿⡇⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀ ││  since  under-voltage, throttled  (0x50000)  │
+│         ⢀⣤⣾⣿⣿⣦⣄⡀⡀⢀⣀⡀⡀⡀⡀⡀⡀⣿⣿⣧⣤⣤⣤⣶⣿⣷⣦⡀⡀⡀⡀⡀⡀⡀⡀⡀⡀⢀⣴⣿ ││  disk   21.0G/56.0G  38%                     │
+│         ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⣀⣤⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣴⣶⣿⣿⣶⣶⣶⣿⣿⣿ ││  io     r 0 B/s   w 84.0 KB/s                │
+│  cpu    ███▉░░░░░░░░░░░░  24%  4 cores           ││  api    no successful poll yet               │
+│  c0  ██▉░░░░░░░░░░  22%  c1  █▉░░░░░░░░░░░  14%  │└──────────────────────────────────────────────┘
+│  c2  █████▍░░░░░░░  41%  c3  █▏░░░░░░░░░░░   9%  │┌ Radios & network ────────────────────────────┐
+│  mem    ██████▏░░░░░░░░░  38%  2.9G/7.6G         ││  wlan1   up   v1.2M   ^0B     monitor ch6    │
+│  cache  ████▏░░░░░░░░░░░  26%  1.9G reclaimable  ││  eth0    up   v4.0K   ^2.0K                  │
+│  swap   off   214 tasks, 2 running               ││                                              │
+│                                                  ││  USB radios                                  │
+│  PID     COMMAND                    MEM    CPU%  ││  0e8d:7961  MediaTek ALFA AWUS036AXML        │
+│  1284    classg-api                120M    41.2  ││  0bda:2838  Realtek RTL2838 (RTL-SDR V4)     │
+│  1290    classg_wifi                64M    18.7  │└──────────────────────────────────────────────┘
+│  1301    classg-fusion               9M     4.1  │┌ ClassG  127.0.0.1:8081 ──────────────────────┐
+│  902     dockerd                   206M     1.4  ││  ok   up 75h 25m   0.4.1                     │
+│                                                  ││  sensors                                     │
+│                                                  ││   wifi-1     wifi ok      1s 5m:12           │
+│                                                  ││   sdr-1      sdr  ok      2s 5m:0            │
+└──────────────────────────────────────────────────┘└──────────────────────────────────────────────┘
+                                   q quit · r refresh now · ? help
 ```
 
 It is a Rust rewrite of `classg/scripts/pi-dash.sh`, which orchestrated tmux
@@ -44,10 +56,40 @@ which is also what makes the binary runnable on a dev machine that is not a Pi.
 
 | Pane | What |
 |---|---|
-| **system** | CPU (aggregate + per core), memory, swap, load, and the busiest processes, from `/proc/stat`, `/proc/meminfo`, `/proc/<pid>/stat` |
+| **system** | CPU history graph, aggregate and per-core meters, memory and reclaimable cache, swap, load, task counts, and the busiest processes, from `/proc/stat`, `/proc/meminfo`, `/proc/<pid>/stat` |
 | **health** | temperature, core voltage, ARM clock, **decoded throttle bits**, disk, I/O |
 | **radios** | per-interface throughput from `/proc/net/dev`, monitor-mode state, USB radio presence |
 | **classg** | `GET /api/v1/health`, `/tracks`, `/detections` — degraded, never fatal |
+
+### Why the system pane looks like btop
+
+Because that is the pane btop used to occupy, and the layout is the one the
+muscle memory is for: a scrolling history graph over a gradient meter, per-core
+meters in a grid, then the memory split, then the busiest processes. Meters
+fill at eighth-of-a-cell precision and colour green→amber→red *by position*,
+so where a bar ends reads without stopping to parse the number next to it.
+
+The history graph earns its rows on its own: a Pi pinned at 100% and a Pi that
+spikes to 100% once a minute show the same instant number and are completely
+different problems. Braille packs two samples per column and four levels per
+row, so the graph holds roughly four minutes at the default cadence.
+
+None of this is a btop reimplementation — no tree view, no process management,
+no per-core history.
+
+#### On the Pi's own HDMI console
+
+The framebuffer console (`TERM=linux`) runs a font with no block, braille or
+box-drawing glyphs; all three come out as replacement characters. Set
+
+```toml
+[dash]
+glyphs = "ascii"
+```
+
+and the meters, the graph *and the pane frames* all drop to ASCII together.
+The colour ramp also detects a 16-colour terminal from `TERM`/`COLORTERM` and
+falls back on its own — no configuration needed for that half.
 
 ### The throttle bits
 
@@ -109,6 +151,9 @@ Precedence: **env > file > defaults**.
 |---|---|
 | `CLASSG_API` | `http://127.0.0.1:8081` |
 | `CLASSG_DASH_INTERVAL` | `2` (seconds; fractional accepted) |
+
+File-only settings worth knowing about: `theme` (accent colour), `processes`
+(rows of process table), and `glyphs` (`unicode` or `ascii`, above).
 
 See [`pi-dash.toml`](pi-dash.toml) for the file form. It is searched next to
 the binary, in the working directory, then `~/.config/pi-dash/pi-dash.toml`;

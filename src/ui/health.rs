@@ -8,9 +8,10 @@ use ratatui::{
     Frame,
 };
 
+use super::gauge;
 use super::{field, pane_block, threshold_color, BAD, DIM, OK, WARN};
 use crate::app::App;
-use crate::format::{human_kb, human_rate, meter};
+use crate::format::{human_kb, human_rate};
 use crate::panes::health::{
     Tense, Throttle, TEMP_HOT_C, TEMP_METER_HI, TEMP_METER_LO, TEMP_WARN_C,
 };
@@ -24,7 +25,7 @@ use crate::panes::health::{
 pub const CONTENT_ROWS: u16 = 7;
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let block = pane_block(" Pi health ", app.accent);
+    let block = pane_block(" Pi health ", app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {
@@ -38,22 +39,31 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     lines.push(field(
         "temp",
         match health.temp_c {
-            Some(temp) => vec![
-                Span::styled(
-                    format!("{temp:>4.1}C"),
-                    Style::default()
-                        .fg(threshold_color(temp, TEMP_WARN_C, TEMP_HOT_C))
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" [{}]", meter(temp, TEMP_METER_LO, TEMP_METER_HI, 12)),
-                    Style::default().fg(DIM),
-                ),
-                Span::styled(
+            Some(temp) => {
+                let mut spans = vec![
+                    Span::styled(
+                        format!("{temp:>4.1}C"),
+                        Style::default()
+                            .fg(threshold_color(temp, TEMP_WARN_C, TEMP_HOT_C))
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(" "),
+                ];
+                // The same gradient meter the system pane uses, over the
+                // throttle window rather than over 0-100: an SoC temperature
+                // is only meaningful against the point it starts throttling
+                // at, and "68% of nothing in particular" is not actionable.
+                spans.extend(gauge::bar(
+                    (temp - TEMP_METER_LO) / (TEMP_METER_HI - TEMP_METER_LO),
+                    12,
+                    app.glyphs,
+                ));
+                spans.push(Span::styled(
                     format!("  {TEMP_METER_LO:.0}-{TEMP_METER_HI:.0}"),
                     Style::default().fg(DIM),
-                ),
-            ],
+                ));
+                spans
+            }
             None => vec![Span::styled("no thermal zone", Style::default().fg(DIM))],
         },
     ));

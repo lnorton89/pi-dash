@@ -92,6 +92,7 @@ fn main() -> Result<()> {
         println!("interval  {:.2}s", config.interval.as_secs_f64());
         println!("api poll  {:.2}s", config.api_interval.as_secs_f64());
         println!("theme     {}", config.theme);
+        println!("glyphs    {}", config.glyphs);
         println!("usb ids   {}", config.usb_vendor_ids.join(", "));
         println!("ignore    {}", config.ignore_interfaces.join(", "));
         return Ok(());

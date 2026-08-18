@@ -15,6 +15,7 @@
 //! flicker straight back.
 
 pub mod classg;
+pub mod gauge;
 pub mod health;
 pub mod radios;
 pub mod system;
@@ -30,6 +31,7 @@ use ratatui::{
 
 use crate::app::{App, Mode, Pane};
 use crate::config::{NARROW_COLS, READER_MAX_COLS, READER_MIN_COLS};
+use crate::ui::gauge::Glyphs;
 
 /// Green/amber/red, used identically by every pane so a colour means the same
 /// thing wherever you see it.
@@ -206,15 +208,21 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(
         Paragraph::new(lines)
             .wrap(Wrap { trim: false })
-            .block(pane_block(" Help ", app.accent)),
+            .block(pane_block(" Help ", app.accent, app.glyphs)),
         popup,
     );
 }
 
 /// The standard bordered pane.
-pub fn pane_block<'a>(title: &'a str, border: Color) -> Block<'a> {
+///
+/// The frame follows the same glyph set as the meters inside it. Drawing an
+/// ASCII meter inside a Unicode box, which is what this did before, solves
+/// half of the framebuffer-console problem and leaves the frame in
+/// replacement characters.
+pub fn pane_block<'a>(title: &'a str, border: Color, glyphs: Glyphs) -> Block<'a> {
     Block::default()
         .borders(Borders::ALL)
+        .border_set(glyphs.border_set())
         .border_style(Style::default().fg(border))
         .title(title)
         .title_style(

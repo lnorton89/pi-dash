@@ -3,14 +3,23 @@
 //! Dropping the btop dependency is the point of the rewrite: it is another
 //! `apt install` on a box that may be freshly imaged, it owns a whole tmux
 //! pane, and everything it shows that matters here comes out of three files.
-//! What it is *not* is a reimplementation of btop — no graphs, no tree view,
-//! no process management. A CPU meter per core, the memory split, and the top
-//! consumers is the summary you actually read when something is wrong.
+//! What it is *not* is a reimplementation of btop — no tree view, no process
+//! management, no per-core history. A CPU meter per core, one aggregate
+//! history graph, the memory split, and the top consumers is the summary you
+//! actually read when something is wrong.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use super::{page_size, read_trimmed};
+
+/// Aggregate CPU samples kept for the history graph.
+///
+/// The graph packs two samples into every braille column, so this covers a
+/// pane about 240 columns wide — past anything the system pane is given on a
+/// real screen. At the default two-second cadence it is sixteen minutes of
+/// history and 4 kB of f64, which is not a number worth tuning.
+pub const HISTORY_LEN: usize = 480;
 
 /// `/proc` reports CPU time in USER_HZ, which Linux fixes at 100 for the
 /// procfs ABI regardless of the kernel's internal CONFIG_HZ. The aggregate
@@ -297,6 +306,11 @@ pub struct SystemPane {
     last_sample: Option<Instant>,
 
     pub cpu_pct: Option<f64>,
+    /// Aggregate CPU as a fraction, oldest first, for the history graph.
+    /// Only real readings land here — the first sample has nothing to
+    /// difference against, and a 0.0 placeholder would draw a trough the box
+    /// never had.
+    pub cpu_history: Vec<f64>,
     pub core_pct: Vec<Option<f64>>,
     pub mem: MemInfo,
     pub load: [f64; 3],
@@ -317,6 +331,7 @@ impl Default for SystemPane {
             prev_proc_ticks: HashMap::new(),
             last_sample: None,
             cpu_pct: None,
+            cpu_history: Vec::with_capacity(HISTORY_LEN),
             core_pct: Vec::new(),
             mem: MemInfo::default(),
             load: [0.0; 3],
@@ -330,6 +345,18 @@ impl Default for SystemPane {
 }
 
 impl SystemPane {
+    /// Appends one reading, dropping the oldest once the window is full.
+    /// A `Vec` shift of a few hundred f64 once per sample is cheaper than the
+    /// `make_contiguous` a `VecDeque` would need on every frame to hand the
+    /// graph a slice — the read side runs far more often than the write side.
+    fn push_history(&mut self, frac: f64) {
+        if self.cpu_history.len() >= HISTORY_LEN {
+            let excess = self.cpu_history.len() + 1 - HISTORY_LEN;
+            self.cpu_history.drain(..excess);
+        }
+        self.cpu_history.push(frac.clamp(0.0, 1.0));
+    }
+
     pub fn sample(&mut self, now: Instant) {
         let Some(stat) = read_trimmed("/proc/stat") else {
             self.unavailable = Some("/proc/stat is not readable — not a Linux box?".to_string());
@@ -340,6 +367,9 @@ impl SystemPane {
         let (aggregate, cores) = parse_stat(&stat);
         if let (Some(current), Some(prev)) = (aggregate, self.prev_aggregate) {
             self.cpu_pct = current.usage_since(&prev);
+            if let Some(pct) = self.cpu_pct {
+                self.push_history(pct / 100.0);
+            }
         }
         self.core_pct = cores
             .iter()
@@ -494,6 +524,30 @@ ctxt 999
             None,
             "counters went backwards"
         );
+    }
+
+    #[test]
+    fn history_keeps_the_newest_samples_and_stays_bounded() {
+        let mut pane = SystemPane::default();
+        for i in 0..HISTORY_LEN + 50 {
+            pane.push_history(i as f64 / 10_000.0);
+        }
+        assert_eq!(pane.cpu_history.len(), HISTORY_LEN);
+        // The window slid: the newest reading is last, the oldest 50 are gone.
+        let newest = (HISTORY_LEN + 49) as f64 / 10_000.0;
+        assert!((pane.cpu_history[HISTORY_LEN - 1] - newest).abs() < 1e-12);
+        assert!(
+            pane.cpu_history[0] > 0.0049,
+            "the first 50 must have aged out"
+        );
+    }
+
+    #[test]
+    fn history_never_stores_a_value_outside_the_graph_range() {
+        let mut pane = SystemPane::default();
+        pane.push_history(-1.0);
+        pane.push_history(4.0);
+        assert_eq!(pane.cpu_history, vec![0.0, 1.0]);
     }
 
     #[test]

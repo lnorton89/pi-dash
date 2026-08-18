@@ -9,6 +9,7 @@ use crate::panes::classg::ClassgPane;
 use crate::panes::health::HealthPane;
 use crate::panes::radios::RadiosPane;
 use crate::panes::system::SystemPane;
+use crate::ui::gauge::Glyphs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -56,6 +57,9 @@ pub struct App {
     pub focus: Pane,
     pub host: String,
     pub accent: Color,
+    /// Resolved once here rather than parsed per frame: every meter, graph
+    /// and pane border on screen asks for it.
+    pub glyphs: Glyphs,
     pub system: SystemPane,
     pub health: HealthPane,
     pub radios: RadiosPane,
@@ -70,6 +74,7 @@ impl App {
         let classg = ClassgPane::spawn(config.api.clone(), config.api_interval);
         App {
             accent: color_from_str(&config.theme),
+            glyphs: Glyphs::parse(&config.glyphs),
             host: hostname::get()
                 .ok()
                 .and_then(|h| h.into_string().ok())

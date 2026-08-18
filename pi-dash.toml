@@ -30,6 +30,20 @@ api_interval_secs = 3.0
 # name; an unrecognised one falls back to cyan rather than failing to start.
 theme = "cyan"
 
+# Characters used for meters, the CPU history graph, and the pane frames.
+#
+#   unicode  block and braille drawing characters — the btop look (default)
+#   ascii    plain ASCII, frames included
+#
+# Set this to "ascii" when watching on the Pi's own HDMI console: the
+# framebuffer font (TERM=linux) has no block, braille or box-drawing glyphs and
+# renders every one of them as a replacement character. Over SSH from anything
+# modern, leave it alone. An unrecognised value falls back to unicode.
+#
+# Colour depth needs no setting — the green→amber→red ramp reads TERM and
+# COLORTERM and drops to the sixteen ANSI colours by itself.
+glyphs = "unicode"
+
 # Rows of process table to show. Omit to fill whatever the pane has room for.
 # processes = 12
 

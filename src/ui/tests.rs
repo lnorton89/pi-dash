@@ -10,6 +10,7 @@ use crate::app::{App, Mode, Pane};
 use crate::config::{Config, READER_MAX_COLS};
 use crate::panes::classg::{HealthResponse, SensorHealth, Snapshot};
 use crate::panes::health::Throttle;
+use crate::panes::system::{MemInfo, ProcRow};
 
 /// Points the API at a port nothing can be listening on, so the poller thread
 /// a test app spawns cannot reach anything real.
@@ -90,6 +91,191 @@ fn every_pane_still_draws_in_a_tiny_terminal() {
         // all. Nothing here may panic on a subtraction or an index.
         render(&mut app, 24, 6);
         render(&mut app, 20, 3);
+    }
+}
+
+/// Fills the system pane with a plausible sample so the meters and the graph
+/// have something to draw. `App::sample` reads /proc, which on a dev machine
+/// that is not Linux yields nothing at all.
+fn with_load(app: &mut App) {
+    app.system.unavailable = None;
+    app.system.cpu_pct = Some(87.0);
+    app.system.core_pct = vec![Some(100.0), Some(99.5), Some(72.0), Some(3.0)];
+    app.system.mem = MemInfo {
+        total_kb: 3_800_000,
+        available_kb: 2_400_000,
+        cached_kb: 1_200_000,
+        buffers_kb: 90_000,
+        swap_total_kb: 524_288,
+        swap_free_kb: 524_288,
+    };
+    app.system.load = [15.67, 5.21, 2.24];
+    app.system.uptime_secs = 26_700;
+    app.system.task_count = 431;
+    app.system.runnable = 4;
+    // A ramp, so the graph has a shape rather than a flat line.
+    app.system.cpu_history = (0..200).map(|i| (i % 100) as f64 / 99.0).collect();
+    app.system.procs = vec![
+        ProcRow {
+            pid: 91_997,
+            name: "npm ci".to_string(),
+            state: 'R',
+            cpu_pct: 88.0,
+            rss_kb: 482_000,
+        },
+        ProcRow {
+            pid: 68_260,
+            name: "dump1090-mutability".to_string(),
+            state: 'D',
+            cpu_pct: 47.0,
+            rss_kb: 6_000,
+        },
+    ];
+}
+
+fn has_braille(rows: &[String]) -> bool {
+    rows.iter().any(|row| {
+        row.chars()
+            // U+2800 is blank braille, which is not proof of a graph.
+            .any(|c| ('\u{2801}'..='\u{28FF}').contains(&c))
+    })
+}
+
+#[test]
+fn the_system_pane_draws_gradient_meters_and_a_history_graph() {
+    let mut app = test_app();
+    with_load(&mut app);
+    let rows = render(&mut app, 140, 44);
+    let screen = rows.join("\n");
+
+    assert!(
+        screen.contains('\u{2588}'),
+        "the meters must be block-filled, not ASCII:\n{screen}"
+    );
+    assert!(
+        has_braille(&rows),
+        "the CPU history graph is missing:\n{screen}"
+    );
+    // The btop-shaped additions, each of which is a number this pane already
+    // sampled and then threw away.
+    assert!(
+        contains(&rows, "reclaimable"),
+        "cache meter missing:\n{screen}"
+    );
+    assert!(
+        contains(&rows, "431 tasks, 4 running"),
+        "task counts missing"
+    );
+    assert!(
+        contains(&rows, "up 0d7h25m"),
+        "uptime chip missing:\n{screen}"
+    );
+    assert!(contains(&rows, "npm ci"), "process table missing");
+}
+
+#[test]
+fn ascii_mode_leaves_no_drawing_glyph_anywhere_on_screen() {
+    // The whole point of the mode: on the Pi's framebuffer console every one
+    // of these renders as a replacement character. The frame counts too —
+    // drawing ASCII meters inside a Unicode box is what this used to do.
+    let mut app = App::new(Config {
+        api: "http://127.0.0.1:1".to_string(),
+        glyphs: "ascii".to_string(),
+        ..Config::default()
+    });
+    with_load(&mut app);
+
+    for (width, height) in [(140, 44), (70, 24), (24, 6)] {
+        for row in render(&mut app, width, height) {
+            for ch in row.chars() {
+                let drawing = matches!(ch,
+                    '\u{2500}'..='\u{257F}'     // box drawing
+                    | '\u{2580}'..='\u{259F}'   // block elements and shades
+                    | '\u{2800}'..='\u{28FF}'   // braille
+                );
+                assert!(
+                    !drawing,
+                    "U+{:04X} survived ascii mode at {width}x{height} in: {row}",
+                    ch as u32
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_short_pane_drops_the_graph_rather_than_the_process_table() {
+    let mut app = test_app();
+    with_load(&mut app);
+    // Narrow layout, so the system pane is the only thing on screen and gets
+    // the terminal's whole height — which here is too little for a graph
+    // worth looking at.
+    app.focus = Pane::System;
+    let rows = render(&mut app, 90, 16);
+    let screen = rows.join("\n");
+    assert!(
+        !has_braille(&rows),
+        "there is no room for a graph here:\n{screen}"
+    );
+    assert!(
+        contains(&rows, "npm ci"),
+        "the table must survive:\n{screen}"
+    );
+}
+
+#[test]
+fn no_system_pane_label_is_ever_sliced_by_the_pane_edge() {
+    // The pane draws without wrapping, so anything too long for the line is
+    // cut wherever the pane ends rather than wrapped. That produced
+    // `1.9G reclaimab` and a load average truncated after the word `load` at
+    // the width the two-column layout actually gives this pane.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.focus = Pane::System;
+
+    /// The rest of a field's line, up to the pane's right border. From 100
+    /// columns the other three panes share these rows, so the row alone is
+    /// not the field.
+    fn cell<'a>(row: &'a str, label: &str) -> Option<&'a str> {
+        let tail = row.split(label).nth(1)?;
+        Some(tail.split(['\u{2502}', '|']).next().unwrap_or(tail))
+    }
+
+    for width in 30..150u16 {
+        for row in render(&mut app, width, 30) {
+            if let Some(cache) = cell(&row, "  cache ") {
+                assert!(
+                    !cache.contains("reclaimab") || cache.contains("reclaimable"),
+                    "sliced at width {width}: {row}"
+                );
+            }
+            if let Some(swap) = cell(&row, "  swap ") {
+                assert!(
+                    !swap.contains("task") || swap.contains(" tasks"),
+                    "sliced at width {width}: {row}"
+                );
+                assert!(
+                    !swap.contains("runnin") || swap.contains(" running"),
+                    "sliced at width {width}: {row}"
+                );
+            }
+            if let Some(cpu) = cell(&row, "  cpu ") {
+                assert!(
+                    !cpu.contains(" core") || cpu.contains(" cores"),
+                    "sliced at width {width}: {row}"
+                );
+                if let Some(load) = cpu.split(" load ").nth(1) {
+                    let numbers: Vec<&str> = load.split_whitespace().collect();
+                    assert_eq!(numbers.len(), 3, "load cut short at width {width}: {row}");
+                    for n in numbers {
+                        assert!(
+                            n.parse::<f64>().is_ok(),
+                            "partial number {n:?} at width {width}: {row}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 
