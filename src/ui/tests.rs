@@ -1761,8 +1761,7 @@ fn only_the_focused_pane_keeps_the_accent() {
     with_load(&mut app);
 
     let accent_of_title = |app: &mut App, needle: &str| -> Option<ratatui::style::Color> {
-        let mut terminal =
-            ratatui::Terminal::new(TestBackend::new(200, 40)).expect("test backend");
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(200, 40)).expect("test backend");
         terminal
             .draw(|frame| draw(frame, app))
             .expect("draw must not fail");
