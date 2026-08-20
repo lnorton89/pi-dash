@@ -19,7 +19,7 @@ use ratatui::{
 };
 
 use super::gauge::{self, Glyphs, Ramp};
-use super::{field, pane_block, push_if_fits, table_header, threshold_color, DIM, GUTTER};
+use super::{field, header_style, pane_block, push_if_fits, threshold_color, DIM, GUTTER};
 use crate::app::App;
 use crate::format::{human_kb, uptime};
 
@@ -29,6 +29,15 @@ use crate::format::{human_kb, uptime};
 /// the label they belong to.
 const METER_MIN: usize = 12;
 const METER_MAX: usize = 24;
+
+/// The COMMAND LINE heading, or nothing when that column was dropped.
+fn cmdline_heading(cmdline_w: usize) -> &'static str {
+    if cmdline_w > 0 {
+        "COMMAND LINE"
+    } else {
+        ""
+    }
+}
 
 /// Process table columns. The command name gets whatever is left.
 const PID_W: usize = 8;
@@ -289,14 +298,40 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let (name_w, cmd_w, bar_w) = (cols.name, cols.cmdline, cols.bar);
         // CPU% is right-aligned over the numbers below it, not left over the
         // space before them.
-        lines.push(table_header(format!(
-            "  {:<PID_W$}{:<name_w$}{:<cmd_w$}{:>MEM_W$}   {:>5}",
-            "PID",
-            "COMMAND",
-            if cmd_w > 0 { "COMMAND LINE" } else { "" },
-            "MEM",
-            "CPU%"
-        )));
+        //
+        // The column the table is ordered by is coloured rather than marked
+        // with a glyph. Two orders that both put a big number at the top are
+        // otherwise told apart only by staring at the rows — but a marker
+        // character would have to come out of a column whose width is already
+        // exactly what the numbers under it need, and any arrow worth reading
+        // is outside ASCII, which is the one thing the framebuffer console
+        // cannot draw.
+        let sorted = system.sort.label();
+        let heading = |text: &'static str| {
+            let style = if text == sorted {
+                header_style().fg(app.accent)
+            } else {
+                header_style()
+            };
+            Span::styled(text, style)
+        };
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!(
+                    "  {:<PID_W$}{:<name_w$}{:<cmd_w$}",
+                    "PID",
+                    "COMMAND",
+                    cmdline_heading(cmd_w)
+                ),
+                header_style(),
+            ),
+            // MEM is right-aligned, so its padding is a span of its own and
+            // the word itself can carry a different colour from the gap.
+            Span::styled(format!("{:>1$}", "", MEM_W - 3), header_style()),
+            heading("MEM"),
+            Span::styled("   ", header_style()),
+            heading("CPU%"),
+        ]));
         // Only the busiest are listed. A Pi runs a couple of hundred mostly
         // idle processes and a full table is a scrolling wall you never read;
         // what you want to know is which one just woke up.

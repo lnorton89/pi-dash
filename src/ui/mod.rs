@@ -144,10 +144,13 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App, wide: bool) {
     let keys = if wide {
-        " q quit · r refresh now · ? help ".to_string()
+        format!(
+            " q quit · r refresh now · s sort by {} · ? help ",
+            app.system.sort.next().label().to_ascii_lowercase()
+        )
     } else {
         format!(
-            " tab/1-4 pane ({}) · q quit · r refresh · ? help ",
+            " tab/1-4 pane ({}) · q quit · r refresh · s sort · ? help ",
             app.focus.title()
         )
     };
@@ -182,6 +185,7 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
         )),
         Line::from("  q / Esc / Ctrl-C   quit"),
         Line::from("  r                  sample now, don't wait for the tick"),
+        Line::from("  s                  sort processes by CPU or by memory"),
         Line::from("  tab / 1-4          switch pane (narrow terminals only)"),
         Line::from("  Ctrl-L             force a full repaint"),
         Line::from("  ?                  close this"),
@@ -265,10 +269,14 @@ pub(crate) fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
 /// and never like the first row of data — which is what a plain bold line
 /// looked like next to a process name.
 pub(crate) fn table_header<'a>(text: String) -> Line<'a> {
-    Line::from(Span::styled(
-        text,
-        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
-    ))
+    Line::from(Span::styled(text, header_style()))
+}
+
+/// The style [`table_header`] applies, for the one table that builds its
+/// heading span by span because it colours the column it is sorted by. Shared
+/// so that heading cannot drift into looking like something else.
+pub(crate) fn header_style() -> Style {
+    Style::default().fg(DIM).add_modifier(Modifier::BOLD)
 }
 
 /// Appends a dim suffix, but only if the line still has room for all of it.

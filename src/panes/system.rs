@@ -208,6 +208,14 @@ pub(crate) struct PidStat {
     /// utime + stime, in USER_HZ.
     pub(crate) cpu_ticks: u64,
     pub(crate) rss_pages: u64,
+    /// Clock ticks after boot at which this process started.
+    ///
+    /// Carried only to make the command-line cache safe. A pid is not an
+    /// identity -- Linux wraps them, and a Pi that has been up for weeks wraps
+    /// them often enough to matter -- so a cache keyed on pid alone would
+    /// eventually label a fresh process with a dead one's arguments. The pair
+    /// is unique for as long as anything here is looking.
+    pub(crate) start_ticks: u64,
 }
 
 /// Parses one `/proc/<pid>/stat`.
@@ -233,6 +241,10 @@ pub(crate) fn parse_pid_stat(text: &str) -> Option<PidStat> {
     let utime: u64 = rest.get(11)?.parse().ok()?;
     let stime: u64 = rest.get(12)?.parse().ok()?;
     let rss_pages: u64 = rest.get(21).and_then(|v| v.parse().ok()).unwrap_or(0);
+    // starttime is field 22, so index 19. Absent on a truncated read, which is
+    // what a process exiting mid-parse looks like; zero simply means the cache
+    // treats it as a new incarnation and reads the file again.
+    let start_ticks: u64 = rest.get(19).and_then(|v| v.parse().ok()).unwrap_or(0);
 
     Some(PidStat {
         pid,
@@ -240,7 +252,37 @@ pub(crate) fn parse_pid_stat(text: &str) -> Option<PidStat> {
         state,
         cpu_ticks: utime + stime,
         rss_pages,
+        start_ticks,
     })
+}
+
+/// What the process table is ordered by.
+///
+/// Two orders rather than the usual four: on a box running 366 mostly-idle
+/// processes, "what just woke up" and "what is holding the memory" are the
+/// only questions this table gets asked. A sort by pid or by name is a list
+/// you would read with `ps` instead.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum SortBy {
+    #[default]
+    Cpu,
+    Memory,
+}
+
+impl SortBy {
+    pub(crate) fn next(self) -> SortBy {
+        match self {
+            SortBy::Cpu => SortBy::Memory,
+            SortBy::Memory => SortBy::Cpu,
+        }
+    }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            SortBy::Cpu => "CPU%",
+            SortBy::Memory => "MEM",
+        }
+    }
 }
 
 /// One row of the process table.
@@ -268,6 +310,7 @@ pub(crate) fn process_rows(
     prev: &HashMap<i32, u64>,
     elapsed: Duration,
     page_bytes: u64,
+    sort: SortBy,
 ) -> Vec<ProcRow> {
     let seconds = elapsed.as_secs_f64();
     let mut rows: Vec<ProcRow> = current
@@ -293,15 +336,23 @@ pub(crate) fn process_rows(
             }
         })
         .collect();
-    // Busiest first, then largest, then by pid so the order is stable between
-    // frames when everything is idle — a table that reshuffles every two
-    // seconds is unreadable.
-    rows.sort_by(|a, b| {
+    // Whichever column was chosen, the other one breaks its ties and the pid
+    // breaks those, so the order is stable between frames while everything is
+    // idle — a table that reshuffles every two seconds is unreadable.
+    let by_cpu = |a: &ProcRow, b: &ProcRow| {
         b.cpu_pct
             .partial_cmp(&a.cpu_pct)
             .unwrap_or(std::cmp::Ordering::Equal)
+    };
+    rows.sort_by(|a, b| match sort {
+        SortBy::Cpu => by_cpu(a, b)
             .then(b.rss_kb.cmp(&a.rss_kb))
-            .then(a.pid.cmp(&b.pid))
+            .then(a.pid.cmp(&b.pid)),
+        SortBy::Memory => b
+            .rss_kb
+            .cmp(&a.rss_kb)
+            .then_with(|| by_cpu(a, b))
+            .then(a.pid.cmp(&b.pid)),
     });
     rows
 }
@@ -314,6 +365,12 @@ pub(crate) struct SystemPane {
     prev_cores: Vec<CpuTimes>,
     prev_proc_ticks: HashMap<i32, u64>,
     last_sample: Option<Instant>,
+    /// Command lines already read, keyed by pid, holding the start time they
+    /// were read for. A process's arguments do not change after it execs, so
+    /// re-reading eighty of these files every tick was work done to arrive at
+    /// the answer we already had.
+    cmdline_cache: HashMap<i32, (u64, String)>,
+    pub(crate) sort: SortBy,
 
     pub(crate) cpu_pct: Option<f64>,
     /// Aggregate CPU as a fraction, oldest first, for the history graph.
@@ -342,6 +399,8 @@ impl Default for SystemPane {
             prev_cores: Vec::new(),
             prev_proc_ticks: HashMap::new(),
             last_sample: None,
+            cmdline_cache: HashMap::new(),
+            sort: SortBy::default(),
             cpu_pct: None,
             cpu_history: Vec::with_capacity(HISTORY_LEN),
             core_pct: Vec::new(),
@@ -422,15 +481,43 @@ impl SystemPane {
 
         let stats = read_process_stats();
         if elapsed > Duration::ZERO {
-            self.procs = process_rows(&stats, &self.prev_proc_ticks, elapsed, self.page_bytes);
+            self.procs = process_rows(
+                &stats,
+                &self.prev_proc_ticks,
+                elapsed,
+                self.page_bytes,
+                self.sort,
+            );
             // Command lines are read only for the rows that could be drawn,
             // and only after the sort has decided which those are. Reading
             // /proc/<pid>/cmdline for all four hundred processes would double
             // the pane's file reads every tick to fill in three hundred rows
             // that are below the fold.
+            //
+            // And now only once per process. Arguments are fixed after an
+            // exec, so those eighty reads a tick were eighty answers already
+            // known — forty file opens a second on the unit this was measured
+            // against, for a dashboard whose own CPU time is part of what it
+            // is reporting on.
+            let starts: HashMap<i32, u64> = stats.iter().map(|s| (s.pid, s.start_ticks)).collect();
             for row in self.procs.iter_mut().take(CMDLINE_ROWS) {
-                row.cmdline = read_cmdline(row.pid).unwrap_or_default();
+                let start = starts.get(&row.pid).copied().unwrap_or_default();
+                let cached = self
+                    .cmdline_cache
+                    .get(&row.pid)
+                    .filter(|(seen, _)| *seen == start);
+                row.cmdline = match cached {
+                    Some((_, text)) => text.clone(),
+                    None => {
+                        let text = read_cmdline(row.pid).unwrap_or_default();
+                        self.cmdline_cache.insert(row.pid, (start, text.clone()));
+                        text
+                    }
+                };
             }
+            // Exited processes take their entry with them, so the cache cannot
+            // outgrow the process table on a box that has been up a month.
+            self.cmdline_cache.retain(|pid, _| starts.contains_key(pid));
         }
         self.prev_proc_ticks = stats.iter().map(|s| (s.pid, s.cpu_ticks)).collect();
     }
@@ -459,10 +546,24 @@ const CMDLINE_ROWS: usize = 80;
 /// argument that contains a space to the next one. Kernel threads have an
 /// empty file, which is how they are told apart from userspace here.
 fn read_cmdline(pid: i32) -> Option<String> {
-    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
-    let text = String::from_utf8_lossy(&raw)
-        .split(' ')
+    parse_cmdline(&std::fs::read(format!("/proc/{pid}/cmdline")).ok()?)
+}
+
+/// Splits the raw file on NUL and joins the arguments with spaces.
+///
+/// The separator is written `'\0'`. It used to be an actual NUL byte,
+/// typed into the source between two quote marks, which is valid Rust and
+/// compiles to exactly this -- but it makes the file binary to anything
+/// that sniffs for NUL. `grep` answers `Binary file src/panes/system.rs
+/// matches` and prints nothing, which is how this function came to be read
+/// as splitting on a space: the byte renders as one nearly everywhere.
+/// Being unreadable to the tools people diagnose with is a cost worth one
+/// escape sequence.
+fn parse_cmdline(raw: &[u8]) -> Option<String> {
+    let text = raw
+        .split(|byte| *byte == 0)
         .filter(|part| !part.is_empty())
+        .map(String::from_utf8_lossy)
         .collect::<Vec<_>>()
         .join(" ");
     (!text.is_empty()).then_some(text)
@@ -659,6 +760,107 @@ SwapFree:         512000 kB
     }
 
     #[test]
+    fn a_command_line_is_split_on_nul_and_joined_with_spaces() {
+        // What /proc actually holds: NUL between arguments and one at the end.
+        let raw = b"/usr/bin/dump1090-mutability\0--net\0--ppm\0" as &[u8];
+        assert_eq!(
+            parse_cmdline(raw).as_deref(),
+            Some("/usr/bin/dump1090-mutability --net --ppm")
+        );
+        // The trailing NUL must not become a trailing space, and no NUL may
+        // survive into a string the pane will measure and draw.
+        let joined = parse_cmdline(raw).expect("a command line");
+        assert!(!joined.contains('\0'));
+        assert!(!joined.ends_with(' '));
+    }
+
+    #[test]
+    fn an_argument_containing_a_space_stays_one_argument() {
+        // The reason this splits on NUL rather than on whitespace. Splitting
+        // on spaces cannot tell these two apart, and both are real: a --label
+        // with a sentence in it, and a path under /home/user/My Documents.
+        assert_eq!(
+            parse_cmdline(b"tcpdump\0-w\0/captures/beacon test.pcap\0").as_deref(),
+            Some("tcpdump -w /captures/beacon test.pcap")
+        );
+    }
+
+    #[test]
+    fn an_empty_command_line_is_none_rather_than_an_empty_string() {
+        // Kernel threads have a zero-length cmdline. None is what tells the
+        // pane to bracket the comm instead of drawing a blank column.
+        assert!(parse_cmdline(b"").is_none());
+        assert!(parse_cmdline(b"\0").is_none());
+        assert!(parse_cmdline(b"\0\0\0").is_none());
+    }
+
+    #[test]
+    fn a_command_line_that_is_not_utf8_is_replaced_rather_than_dropped() {
+        // argv is bytes, not text. A process is free to exec with invalid
+        // UTF-8 in it, and losing the whole row would hide it from the table.
+        let text = parse_cmdline(b"weird\0\xff\xfe\0end\0").expect("a command line");
+        assert!(text.starts_with("weird "));
+        assert!(text.ends_with(" end"));
+    }
+
+    #[test]
+    fn the_process_table_can_be_ordered_by_memory_instead() {
+        let prev: HashMap<i32, u64> = [(1, 0), (2, 0)].into_iter().collect();
+        let current = vec![
+            // Busy but small.
+            stat_of(1, "dump1090", 400, 10),
+            // Idle but large.
+            stat_of(2, "dockerd", 0, 50_000),
+        ];
+        let by_cpu = process_rows(&current, &prev, Duration::from_secs(2), 4096, SortBy::Cpu);
+        assert_eq!(by_cpu[0].name, "dump1090");
+        let by_mem = process_rows(
+            &current,
+            &prev,
+            Duration::from_secs(2),
+            4096,
+            SortBy::Memory,
+        );
+        assert_eq!(by_mem[0].name, "dockerd");
+    }
+
+    #[test]
+    fn a_sort_ties_break_the_same_way_every_frame() {
+        // Two idle processes with identical figures must not swap places
+        // between ticks; a table that reshuffles while you read it is worse
+        // than one that is slightly wrong.
+        let prev: HashMap<i32, u64> = HashMap::new();
+        let current = vec![stat_of(9, "b", 0, 100), stat_of(4, "a", 0, 100)];
+        for sort in [SortBy::Cpu, SortBy::Memory] {
+            let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096, sort);
+            assert_eq!(rows[0].pid, 4, "lowest pid first when all else is equal");
+            assert_eq!(rows[1].pid, 9);
+        }
+    }
+
+    #[test]
+    fn the_sort_toggle_returns_to_where_it_started() {
+        assert_eq!(SortBy::default(), SortBy::Cpu);
+        assert_eq!(SortBy::Cpu.next(), SortBy::Memory);
+        assert_eq!(SortBy::Cpu.next().next(), SortBy::Cpu);
+        // The labels name the column heading they mark.
+        assert_eq!(SortBy::Cpu.label(), "CPU%");
+        assert_eq!(SortBy::Memory.label(), "MEM");
+    }
+
+    #[test]
+    fn starttime_is_read_so_a_recycled_pid_cannot_inherit_a_command_line() {
+        // Field 22, the one the cmdline cache keys on alongside the pid.
+        let text = "1146 (dump1090-mutabi) S 1 1146 1146 0 -1 4194560 1234 0 0 0 \
+900 300 0 0 20 0 4 0 88231 123456789 5678 18446744073709551615 1 1 0 0 0 0 0 0 0";
+        let stat = parse_pid_stat(text).expect("parsed");
+        assert_eq!(stat.pid, 1146);
+        assert_eq!(stat.comm, "dump1090-mutabi");
+        assert_eq!(stat.cpu_ticks, 1200);
+        assert_eq!(stat.start_ticks, 88231);
+    }
+
+    #[test]
     fn a_kernel_thread_has_no_command_line_rather_than_a_bogus_one() {
         // Nothing on a dev machine has this pid; the point is that an
         // unreadable or empty cmdline is None, never an empty-looking String
@@ -674,6 +876,7 @@ SwapFree:         512000 kB
             state: 'S',
             cpu_ticks: ticks,
             rss_pages,
+            start_ticks: 0,
         }
     }
 
@@ -684,7 +887,7 @@ SwapFree:         512000 kB
             stat_of(1, "classg-api", 300, 1000),
             stat_of(2, "idle-thing", 500, 10),
         ];
-        let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096);
+        let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096, SortBy::Cpu);
 
         // 200 ticks = 2.00 s of CPU over a 2 s window = 100% of one core.
         assert_eq!(rows[0].pid, 1);
@@ -701,7 +904,7 @@ SwapFree:         512000 kB
     fn a_brand_new_process_starts_at_zero_not_at_its_whole_lifetime() {
         let prev = HashMap::new();
         let current = vec![stat_of(9, "apt", 99_999, 100)];
-        let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096);
+        let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096, SortBy::Cpu);
         assert_eq!(rows[0].cpu_pct, 0.0);
     }
 
@@ -713,7 +916,7 @@ SwapFree:         512000 kB
             stat_of(3, "a", 0, 10),
             stat_of(5, "b", 0, 10),
         ];
-        let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096);
+        let rows = process_rows(&current, &prev, Duration::from_secs(2), 4096, SortBy::Cpu);
         assert_eq!(
             rows.iter().map(|r| r.pid).collect::<Vec<_>>(),
             vec![3, 5, 7]
@@ -724,7 +927,7 @@ SwapFree:         512000 kB
     fn a_zero_length_interval_cannot_produce_infinite_cpu() {
         let prev: HashMap<i32, u64> = [(1, 0)].into_iter().collect();
         let current = vec![stat_of(1, "x", 500, 0)];
-        let rows = process_rows(&current, &prev, Duration::ZERO, 4096);
+        let rows = process_rows(&current, &prev, Duration::ZERO, 4096, SortBy::Cpu);
         assert_eq!(rows[0].cpu_pct, 0.0);
     }
 }

@@ -144,6 +144,14 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Action {
                 Action::Redraw
             }
             'r' => Action::SampleNow,
+            // Re-sampling rather than just re-sorting: the sort decides which
+            // eighty rows get their command line read, so a re-sort alone
+            // would draw the newly promoted rows without one until the next
+            // tick. The read is cached, so this costs almost nothing.
+            's' => {
+                app.system.sort = app.system.sort.next();
+                Action::SampleNow
+            }
             'l' => focus_next(app),
             'h' => focus_previous(app),
             '1'..='4' => {
@@ -239,6 +247,23 @@ mod tests {
             ),
             Action::Quit
         );
+    }
+
+    #[test]
+    fn s_toggles_the_process_sort_and_resamples() {
+        use crate::panes::system::SortBy;
+        let mut app = test_app();
+        assert_eq!(app.system.sort, SortBy::Cpu);
+        // SampleNow rather than Redraw: the sort decides which rows get their
+        // command line read, so re-sorting without re-sampling would draw the
+        // newly promoted rows with an empty COMMAND LINE column.
+        assert_eq!(
+            handle_key(&mut app, press(KeyCode::Char('s'))),
+            Action::SampleNow
+        );
+        assert_eq!(app.system.sort, SortBy::Memory);
+        handle_key(&mut app, press(KeyCode::Char('s')));
+        assert_eq!(app.system.sort, SortBy::Cpu);
     }
 
     #[test]

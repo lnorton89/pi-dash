@@ -45,7 +45,7 @@ you, plus a system summary so you do not need one.
 │                                                                         ││   TIME     CLASS          dBm  TUNE  ID           │
 │                                                                         ││   14:32:08 Remote ID      -52 ch149  Mavic 3      │
 └─────────────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────┘
-                                                 q quit · r refresh now · ? help
+                                q quit · r refresh now · s sort by mem · ? help
 ```
 
 It is a Rust rewrite of `classg/scripts/pi-dash.sh`, which orchestrated tmux
@@ -173,8 +173,14 @@ cargo build --release
 ./target/release/pi-dash
 ```
 
-Keys: `q`/`Esc`/`Ctrl-C` quit · `r` sample now · `?` help · `Ctrl-L` repaint ·
-`Tab`/`1`-`4` switch pane (narrow terminals only).
+Keys: `q`/`Esc`/`Ctrl-C` quit · `r` sample now · `s` sort the process table by
+CPU or by memory · `?` help · `Ctrl-L` repaint · `Tab`/`1`-`4` switch pane
+(narrow terminals only).
+
+The sorted column is coloured in the heading rather than marked with an arrow:
+the columns are already exactly as wide as the numbers under them, and every
+arrow worth reading is outside ASCII, which is the one thing the framebuffer
+console cannot draw.
 
 To get it on `PATH` as `pidash`:
 

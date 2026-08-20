@@ -198,6 +198,8 @@ fn ascii_mode_leaves_no_drawing_glyph_anywhere_on_screen() {
                 let drawing = matches!(ch,
                     '\u{2500}'..='\u{257F}'     // box drawing
                     | '\u{2580}'..='\u{259F}'   // block elements and shades
+                    | '\u{25A0}'..='\u{25FF}'   // geometric shapes
+                    | '\u{2190}'..='\u{21FF}'   // arrows
                     | '\u{2800}'..='\u{28FF}'   // braille
                 );
                 assert!(
@@ -1213,4 +1215,59 @@ fn a_long_callsign_loses_characters_before_it_loses_its_count() {
         )
     );
     assert!(!contains(&rows, "x1 "), "the count must not be truncated");
+}
+
+#[test]
+fn the_process_table_says_which_column_it_is_sorted_by() {
+    use crate::panes::system::SortBy;
+    // Two orders that both put a big number at the top are otherwise told
+    // apart only by staring at the rows.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.focus = Pane::System;
+
+    let accent_of = |app: &mut App, needle: &str| -> Option<ratatui::style::Color> {
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(100, 24)).expect("test backend");
+        terminal
+            .draw(|frame| draw(frame, app))
+            .expect("draw must not fail");
+        let buffer = terminal.backend().buffer().clone();
+        let needle: Vec<char> = needle.chars().collect();
+        for y in 0..24u16 {
+            let row: Vec<String> = (0..100u16)
+                .map(|x| buffer[(x, y)].symbol().to_string())
+                .collect();
+            if !row.concat().contains("COMMAND") {
+                continue;
+            }
+            for x in 0..row.len().saturating_sub(needle.len()) {
+                if needle
+                    .iter()
+                    .enumerate()
+                    .all(|(i, c)| row[x + i] == c.to_string())
+                {
+                    return buffer[(x as u16, y)].fg.into();
+                }
+            }
+        }
+        None
+    };
+
+    app.system.sort = SortBy::Cpu;
+    assert_eq!(accent_of(&mut app, "CPU%"), Some(app.accent));
+    assert_eq!(accent_of(&mut app, "MEM"), Some(super::DIM));
+
+    app.system.sort = SortBy::Memory;
+    assert_eq!(accent_of(&mut app, "MEM"), Some(app.accent));
+    assert_eq!(accent_of(&mut app, "CPU%"), Some(super::DIM));
+}
+
+#[test]
+fn the_footer_offers_the_sort_you_are_not_already_using() {
+    use crate::panes::system::SortBy;
+    let mut app = test_app();
+    app.system.sort = SortBy::Cpu;
+    assert!(contains(&render(&mut app, 140, 44), "sort by mem"));
+    app.system.sort = SortBy::Memory;
+    assert!(contains(&render(&mut app, 140, 44), "sort by cpu%"));
 }
