@@ -662,6 +662,43 @@ impl Detection {
     }
 }
 
+/// Folds a run of consecutive detections that all say the same thing into one
+/// entry, with how many there were.
+///
+/// On a unit with an SDR this is the difference between a usable list and an
+/// unusable one. ADS-B squitters at roughly 1 Hz per aircraft, so a single
+/// aeroplane overhead fills every row available: measured on the real unit,
+/// sixteen consecutive rows were one ICAO repeating and the Wi-Fi detections
+/// underneath had been pushed off the bottom. `N172SP x16` is the same fact in
+/// one row.
+///
+/// Only runs that share an identity are folded. Two anonymous class E bursts
+/// at the same frequency are not known to be the same transmitter, and nothing
+/// here may claim they were -- an unidentified signal repeating is a thing
+/// worth looking at on its own.
+///
+/// Here rather than in the renderer because `--once` shows the same list and
+/// should not disagree with the pane about what happened.
+pub(crate) fn collapse_runs(detections: &[Detection]) -> Vec<(&Detection, usize)> {
+    let mut rows: Vec<(&Detection, usize)> = Vec::new();
+    for detection in detections {
+        let label = detection.label();
+        if !label.is_empty() {
+            if let Some((previous, run)) = rows.last_mut() {
+                if previous.sensor_id == detection.sensor_id
+                    && previous.detection_class == detection.detection_class
+                    && previous.label() == label
+                {
+                    *run += 1;
+                    continue;
+                }
+            }
+        }
+        rows.push((detection, 1));
+    }
+    rows
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub(crate) struct DetectionPage {
     #[serde(default)]

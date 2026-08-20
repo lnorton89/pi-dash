@@ -27,8 +27,8 @@ use super::{pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
 use crate::app::App;
 use crate::format::{clip, coarse_uptime, compact_count, human_bytes, short_age};
 use crate::panes::classg::{
-    detection_class_label, Capture, CredentialKind, Detection, DetectionPage, FlexTime,
-    HealthResponse, Snapshot, SpectrumSweep, Track, TrackPage, MAX_ROWS,
+    collapse_runs, detection_class_label, Capture, CredentialKind, Detection, DetectionPage,
+    FlexTime, HealthResponse, Snapshot, SpectrumSweep, Track, TrackPage, MAX_ROWS,
 };
 
 /// Below this the detections table drops its SENSOR column. On a unit with one
@@ -772,7 +772,7 @@ fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) 
     ));
     lines.push(table_header(header));
 
-    for (detection, run) in collapse(&page.detections)
+    for (detection, run) in collapse_runs(&page.detections)
         .into_iter()
         .take(room.saturating_sub(1))
     {
@@ -826,40 +826,6 @@ fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) 
         lines.push(Line::from(spans));
     }
     lines
-}
-
-/// Folds a run of consecutive detections that all say the same thing into one
-/// row, with how many there were.
-///
-/// On a unit with an SDR this is the difference between a usable list and an
-/// unusable one. ADS-B squitters at roughly 1 Hz per aircraft, so a single
-/// aeroplane overhead fills every row in the pane: measured on the real unit,
-/// sixteen consecutive rows were one ICAO repeating, and the Wi-Fi detections
-/// underneath them had been pushed off the bottom. `N172SP x16` is the same
-/// fact in one row.
-///
-/// Only runs that share an identity are folded. Two anonymous class E bursts
-/// at the same frequency are not known to be the same transmitter, and the
-/// pane must not claim they were -- an unidentified signal repeating is a
-/// thing worth looking at on its own.
-fn collapse(detections: &[Detection]) -> Vec<(&Detection, usize)> {
-    let mut rows: Vec<(&Detection, usize)> = Vec::new();
-    for detection in detections {
-        let label = detection.label();
-        if !label.is_empty() {
-            if let Some((previous, run)) = rows.last_mut() {
-                if previous.sensor_id == detection.sensor_id
-                    && previous.detection_class == detection.detection_class
-                    && previous.label() == label
-                {
-                    *run += 1;
-                    continue;
-                }
-            }
-        }
-        rows.push((detection, 1));
-    }
-    rows
 }
 
 /// What to actually do about a credential the API would not accept.

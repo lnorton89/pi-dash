@@ -13,7 +13,9 @@ use anyhow::Result;
 
 use crate::config::Config;
 use crate::format::{human_bytes, human_kb, human_rate, human_rate_compact, short_age, uptime};
-use crate::panes::classg::{detection_class_label, Client, CredentialKind, Slow, Snapshot};
+use crate::panes::classg::{
+    collapse_runs, detection_class_label, Client, CredentialKind, Slow, Snapshot,
+};
 use crate::panes::health::{HealthPane, Tense, Throttle};
 use crate::panes::radios::{RadiosPane, WirelessMode};
 use crate::panes::system::SystemPane;
@@ -372,18 +374,24 @@ fn print_classg(snapshot: &Snapshot, out: &mut impl Write) -> Result<()> {
     match &snapshot.detections {
         Some(page) => {
             writeln!(out, "  detects  {} total", page.total)?;
-            for detection in &page.detections {
+            // Folded exactly as the pane folds them, so the two views cannot
+            // disagree about what happened. One aeroplane overhead otherwise
+            // fills this list too.
+            for (detection, run) in collapse_runs(&page.detections) {
                 let rf = detection.rf.clone().unwrap_or_default();
+                let label = match run {
+                    0 | 1 => detection.label(),
+                    n => format!("{} x{n}", detection.label()),
+                };
                 writeln!(
                     out,
-                    "    {:<5} {:<15} {:<7} {:<6} {}",
+                    "    {:<5} {:<15} {:<7} {:<6} {label}",
                     detection.sensor_kind,
                     class_label(&detection.detection_class),
                     rf.rssi_dbm
                         .map(|r| format!("{r:.0}dBm"))
                         .unwrap_or_default(),
                     rf.tuning().unwrap_or_default(),
-                    detection.label()
                 )?;
             }
         }

@@ -235,16 +235,22 @@ pub(crate) fn parse_pid_stat(text: &str) -> Option<PidStat> {
     let comm = text[open + 1..close].to_string();
 
     // After the closing paren the fields are 1-indexed from 3, so field N is
-    // at index N-3: state 3, utime 14, stime 15, rss 24.
-    let rest: Vec<&str> = text[close + 1..].split_whitespace().collect();
-    let state = rest.first()?.chars().next()?;
-    let utime: u64 = rest.get(11)?.parse().ok()?;
-    let stime: u64 = rest.get(12)?.parse().ok()?;
-    let rss_pages: u64 = rest.get(21).and_then(|v| v.parse().ok()).unwrap_or(0);
-    // starttime is field 22, so index 19. Absent on a truncated read, which is
-    // what a process exiting mid-parse looks like; zero simply means the cache
-    // treats it as a new incarnation and reads the file again.
-    let start_ticks: u64 = rest.get(19).and_then(|v| v.parse().ok()).unwrap_or(0);
+    // at index N-3: state 3, utime 14, stime 15, starttime 22, rss 24.
+    //
+    // Walked with one iterator rather than collected into a Vec. This runs
+    // once per process per sample -- three hundred and sixty-six times a tick
+    // on the unit it was written for -- and the Vec it used to build held some
+    // fifty string slices to read five of them. Fields are pulled in ascending
+    // order because `nth` consumes as it goes.
+    let mut rest = text[close + 1..].split_whitespace();
+    let state = rest.next()?.chars().next()?;
+    let utime: u64 = rest.nth(10)?.parse().ok()?;
+    let stime: u64 = rest.next()?.parse().ok()?;
+    // Absent on a truncated read, which is what a process exiting mid-parse
+    // looks like. Zero start_ticks simply means the command-line cache treats
+    // it as a new incarnation and reads the file again.
+    let start_ticks: u64 = rest.nth(6).and_then(|v| v.parse().ok()).unwrap_or(0);
+    let rss_pages: u64 = rest.nth(1).and_then(|v| v.parse().ok()).unwrap_or(0);
 
     Some(PidStat {
         pid,
@@ -573,24 +579,39 @@ fn parse_cmdline(raw: &[u8]) -> Option<String> {
 /// under a millisecond of wall time on a Pi 4 and avoids a `ps` fork, which
 /// is what the rest of this dashboard is built to avoid.
 fn read_process_stats() -> Vec<PidStat> {
+    use std::io::Read;
+
     let Ok(entries) = std::fs::read_dir("/proc") else {
         return Vec::new();
     };
-    entries
-        .flatten()
-        .filter_map(|entry| {
-            let name = entry.file_name();
-            let name = name.to_str()?;
-            // Numeric directories only; /proc also holds `self`, `net`, etc.
-            if !name.bytes().all(|b| b.is_ascii_digit()) {
-                return None;
-            }
-            // A process can exit between the readdir and the read. That is
-            // normal, not an error worth reporting.
-            let text = std::fs::read_to_string(entry.path().join("stat")).ok()?;
-            parse_pid_stat(&text)
-        })
-        .collect()
+    let mut stats = Vec::new();
+    // One buffer for the whole walk. read_to_string allocates a fresh String
+    // per call, and this loop makes several hundred of them a tick; reusing
+    // one keeps the allocator out of the sampler's way on a box whose spare
+    // capacity is the thing being measured.
+    let mut buf = String::with_capacity(1024);
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        // Numeric directories only; /proc also holds `self`, `net`, etc.
+        if !name.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        // A process can exit between the readdir and the read. That is normal,
+        // not an error worth reporting.
+        let Ok(mut file) = std::fs::File::open(entry.path().join("stat")) else {
+            continue;
+        };
+        buf.clear();
+        if file.read_to_string(&mut buf).is_err() {
+            continue;
+        }
+        if let Some(stat) = parse_pid_stat(&buf) {
+            stats.push(stat);
+        }
+    }
+    stats
 }
 
 #[cfg(test)]
@@ -858,6 +879,41 @@ SwapFree:         512000 kB
         assert_eq!(stat.comm, "dump1090-mutabi");
         assert_eq!(stat.cpu_ticks, 1200);
         assert_eq!(stat.start_ticks, 88231);
+        // Pinned alongside start_ticks because the two are now reached by
+        // walking one iterator forward: get an offset wrong and rss silently
+        // becomes somebody else's field.
+        assert_eq!(stat.rss_pages, 5678);
+    }
+
+    #[test]
+    fn a_stat_line_truncated_mid_read_yields_zeros_not_wrong_fields() {
+        // A process exiting between the readdir and the read is normal. The
+        // two strict fields fail the parse; the two tolerant ones default,
+        // which is what lets the cache treat it as a new incarnation later.
+        let short = "42 (dying) S 1 42 42 0 -1 0 0 0 0 0 700 100";
+        let stat = parse_pid_stat(short).expect("utime and stime are present");
+        assert_eq!(stat.cpu_ticks, 800);
+        assert_eq!(stat.start_ticks, 0);
+        assert_eq!(stat.rss_pages, 0);
+
+        // Not even far enough for utime: no row at all rather than a row of
+        // zeros that would render as a real, idle process.
+        assert!(parse_pid_stat("42 (dying) S 1 42").is_none());
+        assert!(parse_pid_stat("").is_none());
+        assert!(parse_pid_stat("not a stat line").is_none());
+    }
+
+    #[test]
+    fn a_comm_with_spaces_and_parens_still_parses() {
+        // The reason this splits on the last paren rather than on whitespace.
+        let stat = parse_pid_stat(
+            "904 ((sd-pam)) S 1 904 904 0 -1 0 0 0 0 0 10 20 0 0 20 0 1 0 555 0 99 0",
+        )
+        .expect("parsed");
+        assert_eq!(stat.comm, "(sd-pam)");
+        assert_eq!(stat.cpu_ticks, 30);
+        assert_eq!(stat.start_ticks, 555);
+        assert_eq!(stat.rss_pages, 99);
     }
 
     #[test]
