@@ -129,7 +129,8 @@ fn main() -> Result<()> {
 /// shell, which no amount of reading the config file would have revealed.
 fn print_config(config: &Config) {
     println!(
-        "config    {}",
+        "{:<12}{}",
+        "config",
         config
             .source
             .as_ref()
@@ -140,7 +141,7 @@ fn print_config(config: &Config) {
     // The key the origin map is keyed by is not always the label worth
     // printing: `api_interval` is a field name, `api poll` is what it does.
     let row = |label: &str, key: &str, value: String| {
-        println!("{label:<10}{value:<42}({})", config.origins.of(key).label());
+        println!("{label:<12}{value:<40}({})", config.origins.of(key).label());
     };
     row("api", "api", config.api.clone());
     row(
@@ -166,8 +167,11 @@ fn print_config(config: &Config) {
     // Never the token itself. This is the one command somebody pastes into an
     // issue when the dashboard will not talk to their API, and a session
     // cookie in that paste is a live credential for the whole unit.
+    // Labelled for what it is rather than for the config key behind it: this
+    // row reports a local-agent token as readily as a session, and calling
+    // that "session" would be the one line here that misleads.
     row(
-        "session",
+        "credential",
         "session",
         match (&config.session, &config.local_token) {
             (Some(_), _) => "set (session cookie)".to_string(),

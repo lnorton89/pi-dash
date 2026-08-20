@@ -752,6 +752,9 @@ pub(crate) struct Snapshot {
     /// list because nothing is flying and an empty one because every request
     /// 401s are the same picture; this is the caption that tells them apart.
     pub(crate) denied: Option<String>,
+    /// What this poll authenticated with, so a refusal can name the right
+    /// remedy instead of one generic sentence.
+    pub(crate) credential: Option<CredentialKind>,
 }
 
 impl Snapshot {
@@ -844,7 +847,25 @@ pub(crate) enum Credential {
     Local(String),
 }
 
+/// Which kind of credential a poll went out with, for the pane to report.
+///
+/// Separate from [`Credential`] so a snapshot can say what was used without
+/// carrying the secret into the UI layer, where it would sit in a struct that
+/// gets cloned into every frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CredentialKind {
+    Session,
+    Local,
+}
+
 impl Credential {
+    pub(crate) fn kind(&self) -> CredentialKind {
+        match self {
+            Credential::Session(_) => CredentialKind::Session,
+            Credential::Local(_) => CredentialKind::Local,
+        }
+    }
+
     /// Picks the credential to use, discarding blanks.
     ///
     /// An empty string in a config file means "not set", not "send an empty
@@ -941,6 +962,7 @@ impl Client {
             Err(error) => {
                 return Snapshot {
                     error: Some(error.message),
+                    credential: self.credential.as_ref().map(Credential::kind),
                     ..Default::default()
                 }
             }
@@ -997,6 +1019,7 @@ impl Client {
             detections,
             slow,
             denied,
+            credential: self.credential.as_ref().map(Credential::kind),
         }
     }
 }
@@ -1038,8 +1061,14 @@ impl ClassgPane {
         let worker_hints = Arc::clone(&hints);
         let worker_shutdown = Arc::clone(&shutdown);
         std::thread::spawn(move || {
-            let client = Client::new(worker_base, credential);
-            poll_loop(&client, interval, &tx, &worker_hints, &worker_shutdown);
+            poll_loop(
+                worker_base,
+                credential,
+                interval,
+                &tx,
+                &worker_hints,
+                &worker_shutdown,
+            );
         });
 
         ClassgPane {
@@ -1082,12 +1111,15 @@ impl Drop for ClassgPane {
 }
 
 fn poll_loop(
-    client: &Client,
+    base: String,
+    credential: Option<Credential>,
     interval: Duration,
     tx: &Sender<Snapshot>,
     hints: &RowHints,
     shutdown: &AtomicBool,
 ) {
+    let mut credential = credential;
+    let mut client = Client::new(base.clone(), credential.clone());
     let mut polls: u64 = 0;
     let mut slow = Slow::default();
 
@@ -1104,6 +1136,22 @@ fn poll_loop(
         slow = snapshot.slow.clone();
         polls = polls.wrapping_add(1);
 
+        // The API mints a NEW local-agent token every time it starts, and this
+        // unit runs a watchdog and a deploy agent whose job is restarting it.
+        // A token read once at launch therefore goes stale on a schedule, and
+        // the pane would sit refused -- sensors visible, everything else an
+        // empty list -- until somebody noticed and restarted the dashboard.
+        // Which is exactly the silent, plausible-looking failure the rest of
+        // this pane is built to prevent.
+        //
+        // Only on a refusal, so the happy path never touches the disk.
+        if snapshot.denied.is_some() {
+            if let Some(fresh) = refreshed_local(credential.as_ref()) {
+                credential = Some(fresh);
+                client = Client::new(base.clone(), credential.clone());
+            }
+        }
+
         if tx.send(snapshot).is_err() {
             return; // the UI went away
         }
@@ -1115,6 +1163,40 @@ fn poll_loop(
             slept += slice;
         }
     }
+}
+
+/// Re-reads the local-agent token after a refusal, when that is the credential
+/// in play -- or when there was none and one may have appeared since, which is
+/// the case where pi-dash started before the API did.
+///
+/// Never for a session. That one came from a person who set it deliberately,
+/// and quietly swapping it for a machine token would invert the precedence
+/// they chose; if their cookie has expired, the answer is to say so, not to
+/// authenticate as somebody else.
+///
+/// Returns `None` when there is nothing new, so an unchanged token does not
+/// rebuild the agent on every poll.
+fn refreshed_local(current: Option<&Credential>) -> Option<Credential> {
+    if matches!(current, Some(Credential::Session(_))) {
+        return None;
+    }
+    next_local(current, crate::localtoken::discover())
+}
+
+/// The decision half of [`refreshed_local`], split from the lookup so it can be
+/// tested without setting a process-wide environment variable out from under
+/// the other tests running beside it.
+fn next_local(current: Option<&Credential>, found: Option<String>) -> Option<Credential> {
+    if matches!(current, Some(Credential::Session(_))) {
+        return None;
+    }
+    let token = found?;
+    if let Some(Credential::Local(existing)) = current {
+        if *existing == token {
+            return None;
+        }
+    }
+    Some(Credential::Local(token))
 }
 
 #[cfg(test)]
@@ -1482,6 +1564,52 @@ mod tests {
             Some(Credential::Local("machine".to_string()))
         );
         assert_eq!(Credential::pick(None, None), None);
+    }
+
+    #[test]
+    fn a_rotated_local_token_is_picked_up_without_a_restart() {
+        // The API writes a fresh token every time it starts, and this unit has
+        // a watchdog and a deploy agent that restart it. Without this the pane
+        // sits refused from the next deploy until somebody notices.
+        let stale = Credential::Local("first".to_string());
+        let fresh = || Some("second".to_string());
+        assert_eq!(
+            next_local(Some(&stale), fresh()),
+            Some(Credential::Local("second".to_string()))
+        );
+
+        // A token that already matches must not rebuild the agent every poll.
+        let current = Credential::Local("second".to_string());
+        assert_eq!(next_local(Some(&current), fresh()), None);
+
+        // Having had none and finding one is the case where pi-dash started
+        // before the API did.
+        assert_eq!(
+            next_local(None, fresh()),
+            Some(Credential::Local("second".to_string()))
+        );
+
+        // Nothing on disk leaves the credential alone rather than clearing it.
+        assert_eq!(next_local(Some(&current), None), None);
+
+        // A session is a person's deliberate choice and is never quietly
+        // swapped for a machine token, however stale it has become -- that
+        // would invert the precedence they picked.
+        let session = Credential::Session("human".to_string());
+        assert_eq!(next_local(Some(&session), fresh()), None);
+    }
+
+    #[test]
+    fn a_snapshot_reports_which_credential_it_went_out_with() {
+        let local = Client::new(
+            "http://127.0.0.1:1".to_string(),
+            Some(Credential::Local("t".to_string())),
+        );
+        let snapshot = local.poll(5, 5, true, &Slow::default());
+        assert_eq!(snapshot.credential, Some(CredentialKind::Local));
+
+        let bare = Client::new("http://127.0.0.1:1".to_string(), None);
+        assert_eq!(bare.poll(5, 5, true, &Slow::default()).credential, None);
     }
 
     #[test]

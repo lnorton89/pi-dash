@@ -27,8 +27,8 @@ use super::{pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
 use crate::app::App;
 use crate::format::{clip, coarse_uptime, compact_count, human_bytes, short_age};
 use crate::panes::classg::{
-    detection_class_label, Capture, Detection, DetectionPage, FlexTime, HealthResponse, Snapshot,
-    SpectrumSweep, Track, TrackPage, MAX_ROWS,
+    detection_class_label, Capture, CredentialKind, Detection, DetectionPage, FlexTime,
+    HealthResponse, Snapshot, SpectrumSweep, Track, TrackPage, MAX_ROWS,
 };
 
 /// Below this the detections table drops its SENSOR column. On a unit with one
@@ -299,13 +299,16 @@ fn status_lines<'a>(snapshot: &Snapshot, health: &HealthResponse, width: usize) 
                     dim(format!("  {}", user.role)),
                 ],
             ),
-            (None, _) => labelled(
-                "session",
-                vec![
-                    Span::styled("not logged in", Style::default().fg(WARN)),
-                    dim("   set CLASSG_SESSION".to_string()),
-                ],
-            ),
+            (None, _) => {
+                let (state, detail) = remedy(snapshot.credential);
+                let mut spans = vec![Span::styled(state, Style::default().fg(WARN))];
+                let mut used = GUTTER + 1 + state.len();
+                // The detail is the first thing to drop. "not logged in" plus a
+                // sentence was wider than a 46-column pane and got sliced at
+                // the frame, which turned advice into a fragment.
+                push_if_fits(&mut spans, &mut used, width, format!("  {detail}"));
+                labelled("session", spans)
+            }
         });
     }
 
@@ -857,6 +860,28 @@ fn collapse(detections: &[Detection]) -> Vec<(&Detection, usize)> {
         rows.push((detection, 1));
     }
     rows
+}
+
+/// What to actually do about a credential the API would not accept.
+///
+/// One sentence for all three cases was wrong in two of them. Which credential
+/// went out decides the remedy: a local token that is refused has almost
+/// certainly just been rotated by an API restart, and the poller re-reads it
+/// by itself, so the honest thing to say is that it is recovering rather than
+/// to send somebody to a config file.
+fn remedy(credential: Option<CredentialKind>) -> (&'static str, &'static str) {
+    match credential {
+        // Rotated on every API start. The poller picks the new one up by
+        // itself on the next poll, so this row is what the intervening second
+        // or two looks like and not something to go and fix.
+        Some(CredentialKind::Local) => ("rejected", "token rotated, re-reading"),
+        // Sessions slide out after twelve hours and nothing here can renew one.
+        Some(CredentialKind::Session) => ("rejected", "CLASSG_SESSION expired"),
+        // Never sent anything. Either the API writes no token on this layout,
+        // or this process cannot read the one it writes -- that file is 0640,
+        // and being able to read it *is* the credential.
+        None => ("no token", ".agent-state unreadable?"),
+    }
 }
 
 /// `wifi-1` where the record names its sensor, the bare kind where it does not.

@@ -13,7 +13,9 @@ use anyhow::Result;
 
 use crate::config::Config;
 use crate::format::{human_bytes, human_kb, human_rate, human_rate_compact, short_age, uptime};
-use crate::panes::classg::{detection_class_label, Client, Credential, Slow, Snapshot};
+use crate::panes::classg::{
+    detection_class_label, Client, Credential, CredentialKind, Slow, Snapshot,
+};
 use crate::panes::health::{HealthPane, Tense, Throttle};
 use crate::panes::radios::{RadiosPane, WirelessMode};
 use crate::panes::system::SystemPane;
@@ -266,7 +268,21 @@ fn print_classg(snapshot: &Snapshot, out: &mut impl Write) -> Result<()> {
             if auth.setup_required {
                 writeln!(out, "           this unit has no accounts yet")?;
             } else if auth.auth_enabled && !auth.authenticated {
-                writeln!(out, "           set CLASSG_SESSION to a session cookie")?;
+                // Which credential went out decides the remedy. A local token
+                // that is refused has almost certainly just been rotated by an
+                // API restart, and the running dashboard re-reads it; sending
+                // somebody to set CLASSG_SESSION would be advice for a problem
+                // they do not have.
+                writeln!(
+                    out,
+                    "           {}",
+                    match snapshot.credential {
+                        Some(CredentialKind::Local) =>
+                            "the local-agent token was rejected; the API rewrites it on restart",
+                        Some(CredentialKind::Session) => "CLASSG_SESSION has expired",
+                        None => "no local-agent token found; check .agent-state is readable",
+                    }
+                )?;
             }
         }
     }

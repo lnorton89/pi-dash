@@ -36,22 +36,25 @@ interval_secs = 2.0
 # does not need to pay to tell you the same answer.
 api_interval_secs = 3.0
 
-# Session cookie for a ClassG API with authentication switched on.
+# Session cookie, for watching a unit that is NOT this one.
 #
-# Only /health and /auth/me are public. Without a session everything else
-# answers 401, and the pane shows sensor state, says the API refused it, and
-# tells you to set this — rather than drawing an empty track list, which is
-# indistinguishable from a quiet sky.
+# Almost nobody needs this. On the box it is watching, pi-dash authenticates
+# with the local-agent token the API writes into `.agent-state` at startup:
+# being able to read that file is the credential, there is nothing to configure,
+# and it grants viewer — enough to read the sky, not enough to restart a radio.
 #
-# This is the value of the `classg_session` cookie, not a password: pi-dash
-# never logs in and cannot mint a session of its own. Copy it from a browser
-# that is already signed in.
+# A token on this disk describes THIS box, so pointing the dashboard at another
+# unit over the network is the case a session covers. It is the value of the
+# `classg_session` cookie rather than a password: pi-dash never logs in and
+# holds nothing that could mint a session. Copy it from a browser that is
+# already signed in.
 #
-# Prefer the CLASSG_SESSION environment variable. This is a live credential for
-# the whole unit, and a file sitting next to the binary is a worse place for one
-# than a shell export. Left unset, or empty, means no session — which is the
-# right answer for the common case, where the API is on loopback with
-# authentication off.
+# Prefer the CLASSG_SESSION environment variable, which also takes precedence
+# over anything found locally. This is a live credential carrying whatever the
+# person it belongs to can do, and a file sitting next to the binary is a worse
+# place for one than a shell export. Empty means unset.
+#
+# `pi-dash --print-config` reports which credential is in play, never its value.
 # session = ""
 
 # Accent colour for borders and the title chip. Any standard terminal colour

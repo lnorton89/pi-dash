@@ -946,8 +946,11 @@ fn a_refused_poll_is_explained_once_rather_than_drawn_as_an_empty_sky() {
 
     let rows = render(&mut app, 140, 44);
     assert!(contains(&rows, "log in to continue"), "{}", rows.join("\n"));
-    assert!(contains(&rows, "not logged in"));
-    assert!(contains(&rows, "CLASSG_SESSION"), "and how to fix it");
+    // No credential went out at all, so the row names that state and the
+    // remedy is the token file rather than a browser cookie.
+    assert!(contains(&rows, "no token"));
+    // With no credential at all the remedy is the token file, not a cookie.
+    assert!(contains(&rows, ".agent-state"), "and how to fix it");
     assert!(contains(&rows, "tracks unavailable"));
 }
 
