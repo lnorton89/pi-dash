@@ -170,7 +170,7 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App, wide: bool) {
 
 fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     let width = area.width.min(64);
-    let height = area.height.min(21);
+    let height = area.height.min(23);
     let popup = Rect {
         x: area.x + (area.width - width) / 2,
         y: area.y + (area.height - height) / 2,
@@ -193,7 +193,8 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
         Line::from("  r                  sample now, don't wait for the tick"),
         Line::from("  s                  sort processes by CPU or by memory"),
         Line::from("  f                  filter processes by name or command line"),
-        Line::from("  tab / 1-4          switch pane (narrow terminals only)"),
+        Line::from("  up/down/pgup/pgdn  scroll the process table, home for the top"),
+        Line::from("  tab / 1-4          focus a pane; its number is in its title"),
         Line::from("  Ctrl-L             force a full repaint"),
         Line::from("  ?                  close this"),
         Line::default(),
@@ -211,7 +212,7 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
         // Whether a session is configured, never the token. This overlay is
         // the thing somebody screenshots when asking why a pane is empty.
         Line::from(format!(
-            "  session   {}",
+            "  credential {}",
             match (&app.config.session, &app.config.local_token) {
                 (Some(_), _) => "set — sent as the classg_session cookie",
                 (None, Some(_)) =>
@@ -275,25 +276,32 @@ pub(crate) fn numbered_pane_block<'a>(
     title: &'a str,
     accent: Color,
     glyphs: Glyphs,
+    focused: bool,
 ) -> Block<'a> {
     let index = Pane::ALL.iter().position(|p| *p == pane).unwrap_or(0) + 1;
+    // The focused pane keeps the accent; the rest recede. Without this the
+    // numbers would advertise keys that do nothing: `focus` only ever chose
+    // which pane to draw on a narrow terminal, so on a wide one 1-4 and Tab
+    // moved something invisible. btop highlights its focused box for exactly
+    // this reason.
+    let border = if focused { accent } else { DIM };
     // Built as one title rather than layered on top of pane_block's, because
     // two left-aligned titles are laid out in the order they were added and
     // the number has to come first to read as a key.
     Block::default()
         .borders(Borders::ALL)
         .border_set(glyphs.border_set())
-        .border_style(Style::default().fg(accent))
+        .border_style(Style::default().fg(border))
         .title(Line::from(vec![
             Span::raw(" "),
             Span::styled(
                 index.to_string(),
-                Style::default().fg(accent).add_modifier(Modifier::BOLD),
+                Style::default().fg(border).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!(" {} ", title.trim()),
                 Style::default()
-                    .fg(Color::Gray)
+                    .fg(if focused { Color::Gray } else { DIM })
                     .add_modifier(Modifier::BOLD),
             ),
         ]))

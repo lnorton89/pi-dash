@@ -39,7 +39,13 @@ const SENSOR_COLUMN_AT: usize = 54;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let title = format!(" ClassG  {} ", app.config.api.trim_start_matches("http://"));
-    let block = numbered_pane_block(Pane::Classg, &title, app.accent, app.glyphs);
+    let block = numbered_pane_block(
+        Pane::Classg,
+        &title,
+        app.accent,
+        app.glyphs,
+        app.focus == Pane::Classg,
+    );
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {

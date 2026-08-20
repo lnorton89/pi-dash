@@ -1731,3 +1731,90 @@ fn every_pane_title_carries_the_number_that_selects_it() {
         );
     }
 }
+
+#[test]
+fn the_memory_band_reports_what_is_available_not_only_what_is_used() {
+    // MemAvailable is the kernel's own estimate of what a new allocation could
+    // get without swapping. It is not total-minus-used-bar: it counts the
+    // reclaimable page cache the used figure already excluded, and it is the
+    // number that answers "will this fit".
+    let mut app = test_app();
+    with_load(&mut app);
+    let rows = render(&mut app, 200, 24);
+    // The label in its gutter, not the bare word: "unavailable" appears in the
+    // health pane beside it and matched first.
+    let line = rows
+        .iter()
+        .find(|r| r.contains("  avail  "))
+        .expect("an avail row");
+    // with_load leaves 2.4G of 3.8G available, which is 63%.
+    assert!(line.contains("63%"), "{line}");
+    assert!(line.contains("2.3G") || line.contains("2.4G"), "{line}");
+}
+
+#[test]
+fn only_the_focused_pane_keeps_the_accent() {
+    // The pane numbers advertise 1-4, and on a wide terminal those keys only
+    // ever moved something invisible. The highlight is what makes them mean
+    // anything there.
+    let mut app = test_app();
+    with_load(&mut app);
+
+    let accent_of_title = |app: &mut App, needle: &str| -> Option<ratatui::style::Color> {
+        let mut terminal =
+            ratatui::Terminal::new(TestBackend::new(200, 40)).expect("test backend");
+        terminal
+            .draw(|frame| draw(frame, app))
+            .expect("draw must not fail");
+        let buffer = terminal.backend().buffer().clone();
+        for y in 0..40u16 {
+            let row: String = (0..200u16)
+                .map(|x| buffer[(x, y)].symbol().to_string())
+                .collect();
+            if let Some(byte) = row.find(needle) {
+                // `find` returns a BYTE offset and this row is full of
+                // three-byte box-drawing characters, so it has to be counted
+                // back into columns. Reading the byte offset as a column lands
+                // two thirds of the way to the left of the cell wanted, which
+                // is a frame character and always Gray.
+                let column = row[..byte].chars().count() as u16;
+                return buffer[(column, y)].fg.into();
+            }
+        }
+        None
+    };
+
+    app.focus = Pane::System;
+    assert_eq!(accent_of_title(&mut app, "1 System"), Some(app.accent));
+    assert_eq!(accent_of_title(&mut app, "3 Radios"), Some(super::DIM));
+
+    app.focus = Pane::Radios;
+    assert_eq!(accent_of_title(&mut app, "3 Radios"), Some(app.accent));
+    assert_eq!(accent_of_title(&mut app, "1 System"), Some(super::DIM));
+}
+
+#[test]
+fn the_help_card_fits_every_line_it_carries() {
+    // It has grown three keys since it was sized, and a reference card whose
+    // last line is off the bottom is the one line you needed.
+    let mut app = test_app();
+    app.mode = Mode::Help;
+    let rows = render(&mut app, 100, 30);
+    for needle in [
+        "q / Esc / Ctrl-C",
+        "s  ",
+        "f  ",
+        "up/down/pgup/pgdn",
+        "tab / 1-4",
+        "Ctrl-L",
+        "credential",
+    ] {
+        assert!(
+            contains(&rows, needle),
+            "the help card lost {needle:?}:\n{}",
+            rows.join("\n")
+        );
+    }
+    // And nothing wrapped onto a line of its own.
+    assert!(!rows.iter().any(|r| r.trim_start().starts_with("top)")));
+}

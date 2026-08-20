@@ -30,7 +30,13 @@ const CH_W: usize = 5;
 const DRIVER_MIN_COLS: usize = 12;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let block = numbered_pane_block(Pane::Radios, " Radios & network ", app.accent, app.glyphs);
+    let block = numbered_pane_block(
+        Pane::Radios,
+        " Radios & network ",
+        app.accent,
+        app.glyphs,
+        app.focus == Pane::Radios,
+    );
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {

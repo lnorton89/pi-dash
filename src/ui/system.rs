@@ -314,7 +314,13 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let system = &app.system;
     let glyphs = app.glyphs;
 
-    let mut block = numbered_pane_block(Pane::System, " System ", app.accent, app.glyphs);
+    let mut block = numbered_pane_block(
+        Pane::System,
+        " System ",
+        app.accent,
+        app.glyphs,
+        app.focus == Pane::System,
+    );
     // Uptime rides in the top-right of the frame, as it does in btop. It is
     // the one number here that never changes meaningfully between frames, so
     // it costs nothing to put it where it is out of the way. Only when the
@@ -471,6 +477,31 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     );
     let mem_line = field("mem", mem_spans);
 
+    // What is left to hand out, which is not total-minus-used-bar. MemAvailable
+    // is the kernel's own estimate of what a new allocation could get without
+    // swapping -- it counts the reclaimable page cache that the used figure
+    // above has already excluded, and it is the number that answers "will this
+    // fit". On the cool ramp, because a full bar here is a healthy box and the
+    // load ramp would paint that amber.
+    let avail_pct = if mem.total_kb == 0 {
+        0.0
+    } else {
+        mem.available_kb as f64 * 100.0 / mem.total_kb as f64
+    };
+    let mut avail_spans = gauge::bar(avail_pct / 100.0, meter_width, glyphs, Ramp::Cool);
+    let mut used = GUTTER + meter_width + 5;
+    avail_spans.push(Span::styled(
+        format!(" {avail_pct:>3.0}%"),
+        Style::default().fg(DIM),
+    ));
+    push_if_fits(
+        &mut avail_spans,
+        &mut used,
+        width,
+        format!("  {}", human_kb(mem.available_kb)),
+    );
+    let avail_line = field("avail", avail_spans);
+
     // Buffers and page cache get their own meter rather than being folded into
     // the used figure. On a Pi running the ClassG stack in Docker this is
     // routinely a third of RAM, and it is the part that will be given back
@@ -542,7 +573,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // at a fixed fraction of the pane. The memory rows are wider than a third
     // of it whenever the meter is, and splitting by thirds ran the disks
     // heading straight into `1.2G reclaimable`.
-    let mut band = vec![mem_line, cache_line, swap_line];
+    let mut band = vec![mem_line, avail_line, cache_line, swap_line];
     let disks_at = column_width(&band) + COLUMN_GAP;
     if !app.health.filesystems.is_empty() && disks_at + DISKS_MIN_W <= width {
         // Half the remaining room when there is a net column to follow, all of

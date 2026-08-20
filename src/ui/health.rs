@@ -31,7 +31,13 @@ pub(crate) const CONTENT_ROWS: u16 = 8;
 const VALUE_W: usize = 6;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let block = numbered_pane_block(Pane::Health, " Pi health ", app.accent, app.glyphs);
+    let block = numbered_pane_block(
+        Pane::Health,
+        " Pi health ",
+        app.accent,
+        app.glyphs,
+        app.focus == Pane::Health,
+    );
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {
