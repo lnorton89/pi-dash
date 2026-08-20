@@ -464,6 +464,129 @@ mod tests {
         assert_eq!(secs_to_duration(0.5), std::time::Duration::from_millis(500));
     }
 
+    /// A file only this test writes, removed when it goes out of scope.
+    ///
+    /// Named after the test rather than the process, so two of these running
+    /// beside each other cannot pick the same path.
+    struct TempConfig(PathBuf);
+
+    impl TempConfig {
+        fn new(name: &str, body: &str) -> TempConfig {
+            let path = std::env::temp_dir().join(format!("pi-dash-{name}.toml"));
+            std::fs::write(&path, body).expect("writing a temp config");
+            TempConfig(path)
+        }
+    }
+
+    impl Drop for TempConfig {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_named_file_that_is_not_there_is_an_error() {
+        // The asymmetry the module comment argues for: a file you asked for
+        // by name and did not get is a mistake worth stopping on, and one
+        // merely absent from the search path is not -- the dashboard is more
+        // useful up with defaults than not up at all.
+        let missing = std::env::temp_dir().join("pi-dash-no-such-file-here.toml");
+        let _ = std::fs::remove_file(&missing);
+        assert!(load_config(Some(missing), &CliOverrides::default()).is_err());
+
+        // Whereas searching and finding nothing is fine, whatever is or is
+        // not on this machine's search path.
+        assert!(load_config(None, &CliOverrides::default()).is_ok());
+    }
+
+    #[test]
+    fn a_named_file_that_does_not_parse_says_which_file() {
+        let file = TempConfig::new("broken", "[dash]\napi = \n");
+        let error = load_config(Some(file.0.clone()), &CliOverrides::default())
+            .expect_err("a malformed file must not be ignored");
+        let text = format!("{error:#}");
+        assert!(
+            text.contains("pi-dash-broken.toml"),
+            "the error must name the file: {text}"
+        );
+    }
+
+    #[test]
+    fn a_named_file_is_applied_and_reported_as_the_source() {
+        // Deliberately not asserting on `api`: CLASSG_API in the environment
+        // of whoever runs this would beat the file and the test would be
+        // reporting on their shell rather than on this code.
+        let file = TempConfig::new(
+            "applied",
+            "[dash]\ntheme = \"green\"\nglyphs = \"ascii\"\nprocesses = 12\n",
+        );
+        let config = load_config(Some(file.0.clone()), &CliOverrides::default())
+            .expect("a valid file loads");
+
+        assert_eq!(config.theme, "green");
+        assert_eq!(config.glyphs, "ascii");
+        assert_eq!(config.processes, Some(12));
+        assert_eq!(config.source.as_ref(), Some(&file.0));
+        assert_eq!(config.origins.of("theme"), Origin::File);
+        // Anything the file did not mention keeps its default and says so.
+        assert_eq!(config.origins.of("api_interval"), Origin::Default);
+        assert_eq!(
+            config.api_interval,
+            secs_to_duration(DEFAULT_API_INTERVAL_SECS)
+        );
+    }
+
+    #[test]
+    fn the_command_line_beats_the_file_and_the_environment_both() {
+        // Applied last of all, which is what makes this assertion safe to
+        // make about `api` when the other two are not.
+        let file = TempConfig::new("overridden", "[dash]\napi = \"http://from-file:1\"\n");
+        let config = load_config(
+            Some(file.0.clone()),
+            &CliOverrides {
+                api: Some("http://from-cli:2".to_string()),
+                interval: Some(0.5),
+            },
+        )
+        .expect("loads");
+
+        assert_eq!(config.api, "http://from-cli:2");
+        assert_eq!(config.origins.of("api"), Origin::Cli);
+        assert_eq!(config.interval, std::time::Duration::from_millis(500));
+        assert_eq!(config.origins.of("interval"), Origin::Cli);
+    }
+
+    #[test]
+    fn a_trailing_slash_on_the_api_is_removed_before_anything_uses_it() {
+        // Every request appends an absolute path, so a base that keeps its
+        // slash produces //api/v1/health -- which some proxies answer and
+        // some redirect and none of it is worth finding out about.
+        let file = TempConfig::new("slash", "[dash]\napi = \"http://pi.local:8081/\"\n");
+        let config = load_config(Some(file.0.clone()), &CliOverrides::default()).expect("loads");
+        if config.origins.of("api") == Origin::File {
+            assert_eq!(config.api, "http://pi.local:8081");
+        }
+    }
+
+    #[test]
+    fn a_blank_session_in_a_file_resolves_to_no_credential_at_all() {
+        // An empty value means "not set". Sent as a cookie it would be a
+        // session token that does not exist, and the API would answer 401 to
+        // a dashboard that never had a credential to begin with.
+        let file = TempConfig::new("blank-session", "[dash]\nsession = \"   \"\n");
+        let config = load_config(Some(file.0.clone()), &CliOverrides::default()).expect("loads");
+        assert!(config.session.is_none());
+    }
+
+    #[test]
+    fn an_unreadable_interval_in_a_file_is_clamped_rather_than_obeyed() {
+        // A zero interval would spin the sample loop at full CPU on a box
+        // whose whole problem is that it browns out under load.
+        let file = TempConfig::new("zero-interval", "[dash]\ninterval_secs = 0.0\n");
+        let config = load_config(Some(file.0.clone()), &CliOverrides::default()).expect("loads");
+        assert!(config.interval >= std::time::Duration::from_millis(250));
+    }
+
     #[test]
     fn ignore_patterns_glob_only_a_trailing_star() {
         let patterns = DEFAULT_IGNORE_INTERFACES;

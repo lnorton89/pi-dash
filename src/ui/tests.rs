@@ -1271,3 +1271,57 @@ fn the_footer_offers_the_sort_you_are_not_already_using() {
     app.system.sort = SortBy::Memory;
     assert!(contains(&render(&mut app, 140, 44), "sort by cpu%"));
 }
+
+#[test]
+fn the_classg_pane_survives_a_radios_pane_that_wants_the_whole_column() {
+    // The two panes above ClassG are pinned to Length constraints computed
+    // from their own content, and radios sizes itself to however many
+    // interfaces exist. A Pi running the stack in Docker can present a lot of
+    // them, and nothing caps that number — so on a short terminal the two
+    // fixed panes can ask for more rows than the column has.
+    //
+    // ClassG holds a Min(4) and ratatui's solver honours it over the Lengths,
+    // which is the only reason this works. That is a property of a dependency
+    // rather than of this code, so it is asserted rather than assumed: an
+    // upgrade that reordered those priorities would silently delete the pane
+    // the whole tool exists for.
+    use crate::panes::radios::{Iface, UsbRadio, WirelessMode};
+    let mut app = test_app();
+    with_load(&mut app);
+    app.radios.ifaces = (0..24)
+        .map(|i| Iface {
+            name: format!("wlan{i}"),
+            state: "up".into(),
+            rx_bps: 0.0,
+            tx_bps: 0.0,
+            mode: Some(WirelessMode::Monitor),
+            channel: Some(6),
+            driver: Some("mt7921u".into()),
+        })
+        .collect();
+    app.radios.usb = (0..8)
+        .map(|i| UsbRadio {
+            id: format!("0e8d:796{i}"),
+            description: "MediaTek Inc. Wireless_Device".into(),
+        })
+        .collect();
+
+    // Far more than any of these terminals can give it.
+    assert!(
+        app.radios.content_rows() > 30,
+        "the fixture is not extreme enough"
+    );
+
+    for (width, height) in [(120u16, 10u16), (120, 16), (120, 24), (120, 44)] {
+        let rows = render(&mut app, width, height);
+        assert!(
+            rows.iter().any(|row| row.contains("ClassG")),
+            "the ClassG pane vanished at {width}x{height}:
+{}",
+            rows.join(
+                "
+"
+            )
+        );
+    }
+}
