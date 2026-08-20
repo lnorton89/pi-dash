@@ -3,7 +3,8 @@
 # Every key is optional; anything left out keeps its built-in default, so a
 # three-line file that only moves the API port is a valid config.
 #
-# Precedence is env > this file > defaults. CLASSG_API, CLASSG_SESSION and
+# Precedence is command line > env > this file > defaults. CLASSG_API,
+# CLASSG_SESSION and
 # CLASSG_DASH_INTERVAL all win over what is written here, which keeps the habit
 # from the Bash dashboard working:  CLASSG_API=http://pi:9000 pi-dash
 #

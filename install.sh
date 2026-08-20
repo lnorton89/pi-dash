@@ -13,7 +13,6 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="$HERE/target/release/pi-dash"
 DEST_DIR="${1:-/usr/local/bin}"
-DEST="$DEST_DIR/pidash"
 
 if [[ ! -x "$BIN" ]]; then
     echo "no release build at $BIN" >&2
@@ -25,6 +24,14 @@ if [[ ! -d "$DEST_DIR" ]]; then
     echo "$DEST_DIR does not exist" >&2
     exit 1
 fi
+
+# Resolved before anything prints or compares it. `./install.sh ~/.local/bin/`
+# and `./install.sh ./bin` both name a perfectly good directory and both used
+# to produce a path that could never match what `command -v` reports -- so the
+# shadow check at the bottom fired on the file it had just written and warned
+# that the install would lose to itself.
+DEST_DIR="$(cd "$DEST_DIR" && pwd)"
+DEST="$DEST_DIR/pidash"
 
 if [[ ! -w "$DEST_DIR" ]]; then
     echo "$DEST_DIR is not writable -- re-run with sudo, or pass a directory" >&2
@@ -41,6 +48,16 @@ EOS
 chmod +x "$DEST"
 
 echo "installed $DEST -> $BIN"
+
+# Installing somewhere PATH does not look is the quietest way to lose an
+# afternoon: the install reports success and the command does not exist.
+case ":$PATH:" in
+    *":$DEST_DIR:"*) ;;
+    *)
+        echo "warning: $DEST_DIR is not on your PATH, so 'pidash' will not be found" >&2
+        echo "add it:  echo 'export PATH=\"$DEST_DIR:\$PATH\"' >> ~/.bashrc" >&2
+        ;;
+esac
 
 # A wrapper on PATH that is shadowed by an earlier one is the other confusing
 # way to lose an afternoon.

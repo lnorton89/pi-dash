@@ -260,13 +260,19 @@ whether one is configured, never its value.
 
 ## Configuration
 
-Precedence: **env > file > defaults**.
+Precedence: **command line > env > file > defaults**.
 
-| Variable | Default |
-|---|---|
-| `CLASSG_API` | `http://127.0.0.1:8081` |
-| `CLASSG_DASH_INTERVAL` | `2` (seconds; fractional accepted) |
-| `CLASSG_SESSION` | unset |
+| Variable | Flag | Default |
+|---|---|---|
+| `CLASSG_API` | `--api <URL>` | `http://127.0.0.1:8081` |
+| `CLASSG_DASH_INTERVAL` | `-i, --interval <SECONDS>` | `2` (seconds; fractional accepted) |
+| `CLASSG_SESSION` | — | unset |
+
+`-c, --config <FILE>` names a file instead of searching. A file named that way
+and not found is an error; one merely absent from the search path is not.
+
+`--print-config` reports which tier each value came from, which is the fastest
+way to find a `CLASSG_API` still exported in the shell this was launched from.
 
 File-only settings worth knowing about: `theme` (accent colour), `processes`
 (rows of process table), `api_interval_secs`, and `glyphs` (`unicode` or

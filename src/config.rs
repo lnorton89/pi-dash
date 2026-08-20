@@ -1,7 +1,13 @@
-//! Configuration, resolved from three sources.
+//! Configuration, resolved from four sources.
 //!
-//! Precedence is env > file > built-in default, matching the Bash dashboard
-//! this replaces (which only had env and defaults). The file is optional in a
+//! Precedence is command line > env > file > built-in default, extending the
+//! Bash dashboard this replaces (which only had env and defaults). A fifth
+//! origin, [`Origin::LocalAgent`], is not a tier: it marks a credential found
+//! on this unit's own disk with nobody having configured anything at all.
+//!
+//! Three tiers were documented here, in the README, and in the sample config,
+//! for as long as there were four. `--print-config` has been reporting
+//! "(command line)" as a source the docs never mentioned. The file is optional in a
 //! way `bbs-launcher`'s is not: this runs on a Pi that may have nothing but
 //! the binary on it, and a dashboard that refuses to start because it cannot
 //! find a TOML file it does not need is a dashboard you stop using.

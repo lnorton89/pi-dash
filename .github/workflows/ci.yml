@@ -93,10 +93,18 @@ jobs:
   # rustfmt run from Windows rewrote every file it touched to CRLF in an LF
   # repository, and a NUL byte typed into a source file made grep refuse to
   # search it, which led directly to a function being misdiagnosed.
-  encoding:
+  hygiene:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # install.sh is the first thing a new user runs and the only shipped
+      # code no Rust test can reach. It is fifty lines of bash handling paths
+      # that come from a command line, which is exactly where quoting goes
+      # wrong quietly.
+      - name: Shell scripts
+        run: shellcheck install.sh
+
       - name: Tracked sources are LF and free of NUL bytes
         run: |
           python3 - <<'PY'
