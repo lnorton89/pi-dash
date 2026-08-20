@@ -176,8 +176,14 @@ cargo build --release
 ```
 
 Keys: `q`/`Esc`/`Ctrl-C` quit · `r` sample now · `s` sort the process table by
-CPU or by memory · `?` help · `Ctrl-L` repaint · `Tab`/`1`-`4` switch pane
-(narrow terminals only).
+CPU or by memory · `f` filter it by name or command line · `?` help ·
+`Ctrl-L` repaint · `Tab`/`1`-`4` switch pane (narrow terminals only).
+
+While a filter is open every key is a letter, so `q` types a q rather than
+quitting — `Enter` keeps the filter, `Esc` clears it, and `Ctrl-C` still gets
+you out. It matches the comm *and* the command line, because `--net-ri-port`
+lives in exactly one of the two; while one is set, every process gets its
+command line read rather than only the rows the sort brought to the top.
 
 The sorted column is coloured in the heading rather than marked with an arrow:
 the columns are already exactly as wide as the numbers under them, and every

@@ -127,6 +127,8 @@ fn with_load(app: &mut App) {
             state: 'R',
             cpu_pct: 88.0,
             rss_kb: 482_000,
+            threads: 12,
+            user: "admin".to_string(),
             cmdline: "/usr/bin/node /usr/lib/node_modules/npm/bin/npm-cli.js ci".to_string(),
         },
         ProcRow {
@@ -135,6 +137,8 @@ fn with_load(app: &mut App) {
             state: 'D',
             cpu_pct: 47.0,
             rss_kb: 6_000,
+            threads: 3,
+            user: "dump1090".to_string(),
             cmdline: "/usr/bin/dump1090-mutability --net --quiet".to_string(),
         },
     ];
@@ -1443,4 +1447,90 @@ fn the_second_column_is_placed_by_characters_not_by_bytes() {
             );
         }
     }
+}
+
+#[test]
+fn the_process_table_says_how_much_of_it_is_below_the_fold() {
+    // A table showing the busiest five of four hundred looks exactly like a
+    // table showing all five a box is running.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.system.total_procs = 374;
+    assert!(contains(&render(&mut app, 200, 20), "/374"));
+
+    // Nothing hidden, nothing said.
+    app.system.total_procs = app.system.procs.len();
+    assert!(!contains(&render(&mut app, 200, 20), "/374"));
+}
+
+#[test]
+fn an_active_filter_is_never_invisible() {
+    // A filter that is on and unshown is a table quietly misreporting what the
+    // box is running, so it takes the command-line heading's place.
+    let mut app = test_app();
+    with_load(&mut app);
+    assert!(contains(&render(&mut app, 200, 20), "COMMAND LINE"));
+
+    app.system.filter = "dump".to_string();
+    let rows = render(&mut app, 200, 20);
+    assert!(contains(&rows, "filter: dump"), "{}", rows.join("\n"));
+    assert!(!contains(&rows, "COMMAND LINE"));
+}
+
+#[test]
+fn a_filter_being_typed_shows_a_caret_in_either_glyph_set() {
+    // A text field with no caret is one you cannot tell is focused, and this
+    // one owns the whole keyboard while it is open.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.system.filter = "ngin".to_string();
+    app.system.filter_editing = true;
+    assert!(contains(&render(&mut app, 200, 20), "filter: ngin\u{258f}"));
+
+    // The framebuffer console cannot draw that glyph, and a filter you cannot
+    // see the end of is worse there than anywhere.
+    let mut ascii = App::new(Config {
+        api: "http://127.0.0.1:1".to_string(),
+        glyphs: "ascii".to_string(),
+        ..Config::default()
+    });
+    with_load(&mut ascii);
+    ascii.system.filter = "ngin".to_string();
+    ascii.system.filter_editing = true;
+    assert!(contains(&render(&mut ascii, 200, 20), "filter: ngin_"));
+}
+
+#[test]
+fn threads_and_user_appear_when_there_is_room_and_go_first_when_there_is_not() {
+    let mut app = test_app();
+    with_load(&mut app);
+    let wide = render(&mut app, 200, 20);
+    assert!(contains(&wide, "THR"), "{}", wide.join("\n"));
+    assert!(contains(&wide, "USER"));
+    assert!(
+        contains(&wide, "dump1090"),
+        "the account, not just the comm"
+    );
+
+    // Both are context for a row you have already found; the command line is
+    // how you find it, so they go before it does.
+    let narrow = render(&mut app, 150, 20);
+    assert!(!contains(&narrow, "USER"));
+    assert!(contains(&narrow, "COMMAND LINE"));
+}
+
+#[test]
+fn a_single_threaded_process_leaves_its_thread_column_blank() {
+    // Almost everything on this box is single-threaded, and a column of 1s is
+    // a column of noise with the interesting numbers hidden inside it.
+    let mut app = test_app();
+    with_load(&mut app);
+    if let Some(row) = app.system.procs.get_mut(0) {
+        row.threads = 1;
+    }
+    let line = render(&mut app, 200, 20)
+        .into_iter()
+        .find(|r| r.contains("npm ci"))
+        .expect("the row");
+    assert!(!line.contains(" 1 "), "{line}");
 }

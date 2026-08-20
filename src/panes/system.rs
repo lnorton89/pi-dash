@@ -208,6 +208,8 @@ pub(crate) struct PidStat {
     /// utime + stime, in USER_HZ.
     pub(crate) cpu_ticks: u64,
     pub(crate) rss_pages: u64,
+    /// Threads in this process, `num_threads` from the same file.
+    pub(crate) threads: u64,
     /// Clock ticks after boot at which this process started.
     ///
     /// Carried only to make the command-line cache safe. A pid is not an
@@ -246,10 +248,13 @@ pub(crate) fn parse_pid_stat(text: &str) -> Option<PidStat> {
     let state = rest.next()?.chars().next()?;
     let utime: u64 = rest.nth(10)?.parse().ok()?;
     let stime: u64 = rest.next()?.parse().ok()?;
+    // num_threads is field 20, so index 17. Free: this file is already open
+    // and already being walked past it.
+    let threads: u64 = rest.nth(4).and_then(|v| v.parse().ok()).unwrap_or(0);
     // Absent on a truncated read, which is what a process exiting mid-parse
     // looks like. Zero start_ticks simply means the command-line cache treats
     // it as a new incarnation and reads the file again.
-    let start_ticks: u64 = rest.nth(6).and_then(|v| v.parse().ok()).unwrap_or(0);
+    let start_ticks: u64 = rest.nth(1).and_then(|v| v.parse().ok()).unwrap_or(0);
     let rss_pages: u64 = rest.nth(1).and_then(|v| v.parse().ok()).unwrap_or(0);
 
     Some(PidStat {
@@ -259,6 +264,7 @@ pub(crate) fn parse_pid_stat(text: &str) -> Option<PidStat> {
         cpu_ticks: utime + stime,
         rss_pages,
         start_ticks,
+        threads,
     })
 }
 
@@ -301,6 +307,14 @@ pub(crate) struct ProcRow {
     /// legitimately read 380% on a Pi 4.
     pub(crate) cpu_pct: f64,
     pub(crate) rss_kb: u64,
+    /// Threads, as btop's `Threads` column reports them. A Pi process holding
+    /// twenty of them is doing something structurally different from one
+    /// holding one, and the CPU figure beside it cannot say which.
+    pub(crate) threads: u64,
+    /// The account the process runs as, resolved through /etc/passwd. Empty
+    /// where the uid could not be read or has no passwd entry -- a container's
+    /// uid is routinely unknown to this host.
+    pub(crate) user: String,
     /// The full argument vector, space-joined. Empty for a kernel thread,
     /// which has no `cmdline` at all, and empty for every row the pane was
     /// never going to show — see [`SystemPane::sample`].
@@ -338,6 +352,8 @@ pub(crate) fn process_rows(
                 state: stat.state,
                 cpu_pct,
                 rss_kb: stat.rss_pages.saturating_mul(page_bytes) / 1024,
+                threads: stat.threads,
+                user: String::new(),
                 cmdline: String::new(),
             }
         })
@@ -371,11 +387,21 @@ pub(crate) struct SystemPane {
     prev_cores: Vec<CpuTimes>,
     prev_proc_ticks: HashMap<i32, u64>,
     last_sample: Option<Instant>,
-    /// Command lines already read, keyed by pid, holding the start time they
-    /// were read for. A process's arguments do not change after it execs, so
-    /// re-reading eighty of these files every tick was work done to arrive at
-    /// the answer we already had.
-    cmdline_cache: HashMap<i32, (u64, String)>,
+    /// Command lines and owners already read, keyed by pid, holding the start
+    /// time they were read for. Neither changes after a process execs, so
+    /// re-reading these files every tick was work done to arrive at the answer
+    /// we already had.
+    cmdline_cache: HashMap<i32, (u64, String, String)>,
+    /// uid to account name, read once from /etc/passwd.
+    users: HashMap<u32, String>,
+    /// btop's `filter`. Matches the comm or the command line, case-folded.
+    pub(crate) filter: String,
+    /// True while the filter is being typed, which is what makes the keyboard
+    /// mean letters instead of commands.
+    pub(crate) filter_editing: bool,
+    /// Processes before the filter took any away, for the `12/374` in the
+    /// heading. Without it a filtered table and a quiet box look identical.
+    pub(crate) total_procs: usize,
     pub(crate) sort: SortBy,
 
     pub(crate) cpu_pct: Option<f64>,
@@ -406,6 +432,10 @@ impl Default for SystemPane {
             prev_proc_ticks: HashMap::new(),
             last_sample: None,
             cmdline_cache: HashMap::new(),
+            users: HashMap::new(),
+            filter: String::new(),
+            filter_editing: false,
+            total_procs: 0,
             sort: SortBy::default(),
             cpu_pct: None,
             cpu_history: Vec::with_capacity(HISTORY_LEN),
@@ -485,6 +515,13 @@ impl SystemPane {
             .unwrap_or_default();
         self.last_sample = Some(now);
 
+        // Once, on the first sample that needs it.
+        if self.users.is_empty() {
+            if let Some(text) = read_trimmed("/etc/passwd") {
+                self.users = parse_passwd(&text);
+            }
+        }
+
         let stats = read_process_stats();
         if elapsed > Duration::ZERO {
             self.procs = process_rows(
@@ -505,25 +542,62 @@ impl SystemPane {
             // known — forty file opens a second on the unit this was measured
             // against, for a dashboard whose own CPU time is part of what it
             // is reporting on.
+            self.total_procs = self.procs.len();
             let starts: HashMap<i32, u64> = stats.iter().map(|s| (s.pid, s.start_ticks)).collect();
-            for row in self.procs.iter_mut().take(CMDLINE_ROWS) {
+
+            // A filter matches the command line as well as the comm, and the
+            // command line is normally read only for rows the sort brought to
+            // the top -- so filtering on it would silently miss every idle
+            // process, which is most of them and often the one being hunted.
+            //
+            // While a filter is set, every process gets one. That is the cost
+            // this cache exists to avoid, paid once per process rather than
+            // per tick, and only because somebody asked a question that needs
+            // the answer.
+            let depth = if self.filter.is_empty() {
+                CMDLINE_ROWS
+            } else {
+                self.procs.len()
+            };
+            for row in self.procs.iter_mut().take(depth) {
                 let start = starts.get(&row.pid).copied().unwrap_or_default();
                 let cached = self
                     .cmdline_cache
                     .get(&row.pid)
-                    .filter(|(seen, _)| *seen == start);
-                row.cmdline = match cached {
-                    Some((_, text)) => text.clone(),
+                    .filter(|(seen, _, _)| *seen == start);
+                match cached {
+                    Some((_, text, user)) => {
+                        row.cmdline = text.clone();
+                        row.user = user.clone();
+                    }
                     None => {
                         let text = read_cmdline(row.pid).unwrap_or_default();
-                        self.cmdline_cache.insert(row.pid, (start, text.clone()));
-                        text
+                        // An account with no passwd entry keeps its number,
+                        // which is what a containerised uid looks like from
+                        // the host and is still more use than a blank.
+                        let user = read_uid(row.pid)
+                            .map(|uid| {
+                                self.users
+                                    .get(&uid)
+                                    .cloned()
+                                    .unwrap_or_else(|| uid.to_string())
+                            })
+                            .unwrap_or_default();
+                        self.cmdline_cache
+                            .insert(row.pid, (start, text.clone(), user.clone()));
+                        row.cmdline = text;
+                        row.user = user;
                     }
-                };
+                }
             }
             // Exited processes take their entry with them, so the cache cannot
             // outgrow the process table on a box that has been up a month.
             self.cmdline_cache.retain(|pid, _| starts.contains_key(pid));
+
+            if !self.filter.is_empty() {
+                let needle = self.filter.to_lowercase();
+                self.procs.retain(|row| matches_filter(row, &needle));
+            }
         }
         self.prev_proc_ticks = stats.iter().map(|s| (s.pid, s.cpu_ticks)).collect();
     }
@@ -573,6 +647,65 @@ fn parse_cmdline(raw: &[u8]) -> Option<String> {
         .collect::<Vec<_>>()
         .join(" ");
     (!text.is_empty()).then_some(text)
+}
+
+/// Whether one row survives a filter. `needle` must already be lowercased.
+///
+/// Comm and command line both, because they answer different questions: the
+/// comm is what you remember a thing being called, and the command line is
+/// where the flag you are looking for actually lives. `--net-ri-port` appears
+/// in exactly one of the two.
+///
+/// Split out because the filtering itself happens inside a sample that reads
+/// /proc, and that cannot run on the machine this is written on.
+pub(crate) fn matches_filter(row: &ProcRow, needle: &str) -> bool {
+    row.name.to_lowercase().contains(needle) || row.cmdline.to_lowercase().contains(needle)
+}
+
+/// The real uid of a process, from `/proc/<pid>/status`.
+///
+/// Parsed rather than taken from the directory's owner through MetadataExt,
+/// which is a Unix-only API this crate would then have to feature-gate on
+/// every platform it is developed on. A file read costs one syscall and works
+/// the same everywhere, and it is only ever done for a process the cache has
+/// not seen.
+///
+/// `Uid:` carries four numbers -- real, effective, saved, filesystem. The
+/// first is the one `ps` and `btop` report.
+fn parse_uid(text: &str) -> Option<u32> {
+    text.lines()
+        .find_map(|line| line.strip_prefix("Uid:"))?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()
+}
+
+fn read_uid(pid: i32) -> Option<u32> {
+    parse_uid(&std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?)
+}
+
+/// uid to account name, from `/etc/passwd`.
+///
+/// Read once. The file changes when somebody adds a user, which is not a thing
+/// that happens while a dashboard is open, and re-reading it every tick to
+/// discover that would be a file read per sample for nothing.
+///
+/// Not NSS: resolving through getpwuid would pull in libc bindings and, on a
+/// box using LDAP or systemd-homed, a blocking network lookup inside the
+/// sampler. Every account that runs anything on this Pi is in the file.
+fn parse_passwd(text: &str) -> HashMap<u32, String> {
+    let mut out = HashMap::new();
+    for line in text.lines() {
+        let mut fields = line.split(':');
+        let Some(name) = fields.next() else { continue };
+        // Fields are name:password:uid:gid:...
+        let Some(uid) = fields.nth(1).and_then(|v| v.parse().ok()) else {
+            continue;
+        };
+        out.entry(uid).or_insert_with(|| name.to_string());
+    }
+    out
 }
 
 /// Walks `/proc` once per sample. Reading a few hundred small files costs
@@ -859,6 +992,42 @@ SwapFree:         512000 kB
         }
     }
 
+    fn row_of(name: &str, cmdline: &str) -> ProcRow {
+        ProcRow {
+            name: name.to_string(),
+            cmdline: cmdline.to_string(),
+            ..ProcRow::default()
+        }
+    }
+
+    #[test]
+    fn a_filter_matches_the_comm_and_the_command_line_both() {
+        let row = row_of(
+            "dump1090-mutabi",
+            "/usr/bin/dump1090-mutability --net --net-ri-port 30001",
+        );
+        // What you remember it being called...
+        assert!(matches_filter(&row, "dump1090"));
+        // ...and the flag that only exists in the argv.
+        assert!(matches_filter(&row, "net-ri-port"));
+        assert!(!matches_filter(&row, "tcpdump"));
+    }
+
+    #[test]
+    fn a_filter_ignores_case_because_nobody_types_the_capitals() {
+        let row = row_of("NetworkManager", "/usr/sbin/NetworkManager --no-daemon");
+        assert!(matches_filter(&row, "networkmanager"));
+        assert!(matches_filter(&row, "no-daemon"));
+    }
+
+    #[test]
+    fn a_kernel_thread_can_still_be_filtered_by_its_comm() {
+        // It has no command line at all, so matching only the argv would make
+        // every kernel thread unfindable.
+        let row = row_of("kworker/u16:1-phy", "");
+        assert!(matches_filter(&row, "kworker"));
+    }
+
     #[test]
     fn the_sort_toggle_returns_to_where_it_started() {
         assert_eq!(SortBy::default(), SortBy::Cpu);
@@ -960,6 +1129,35 @@ SwapFree:         512000 kB
         assert!(mine.state.is_ascii_alphabetic(), "state {:?}", mine.state);
     }
 
+    /// Filtering, over the real process table on this machine.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_filter_narrows_the_real_process_table_without_losing_the_total() {
+        let mut pane = SystemPane::default();
+        pane.sample(Instant::now());
+        pane.sample(Instant::now());
+        let all = pane.total_procs;
+        assert!(all > 0, "no processes at all");
+        assert_eq!(pane.procs.len(), all, "nothing is filtered yet");
+
+        // Nothing is called this.
+        pane.filter = "zzz-no-such-process-zzz".to_string();
+        pane.sample(Instant::now());
+        assert!(pane.procs.is_empty(), "{:?}", pane.procs.first());
+        // The count behind the filter survives, which is what stops a filtered
+        // table reading like a box with nothing running on it.
+        assert_eq!(pane.total_procs, all);
+
+        // This binary is in its own table, and its argv names it.
+        pane.filter = "pi".to_string();
+        pane.sample(Instant::now());
+        assert!(
+            !pane.procs.is_empty(),
+            "the test binary filtered itself out"
+        );
+        assert!(pane.procs.len() <= all);
+    }
+
     /// The command line of this process, read the way the pane reads it.
     #[cfg(target_os = "linux")]
     #[test]
@@ -1051,6 +1249,7 @@ SwapFree:         512000 kB
             cpu_ticks: ticks,
             rss_pages,
             start_ticks: 0,
+            threads: 1,
         }
     }
 

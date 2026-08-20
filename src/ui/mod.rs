@@ -144,13 +144,19 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App, wide: bool) {
     let keys = if wide {
-        format!(
-            " q quit · r refresh now · s sort by {} · ? help ",
-            app.system.sort.next().label().to_ascii_lowercase()
-        )
+        if app.system.filter_editing {
+            // While the filter owns the keyboard, the footer has to say so:
+            // every other binding on it is a lie until Enter or Esc.
+            " typing a filter · enter keep · esc clear ".to_string()
+        } else {
+            format!(
+                " q quit · r refresh · s sort by {} · f filter · ? help ",
+                app.system.sort.next().label().to_ascii_lowercase()
+            )
+        }
     } else {
         format!(
-            " tab/1-4 pane ({}) · q quit · r refresh · s sort · ? help ",
+            " tab/1-4 pane ({}) · q quit · r refresh · s sort · f filter · ? help ",
             app.focus.title()
         )
     };
@@ -186,6 +192,7 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
         Line::from("  q / Esc / Ctrl-C   quit"),
         Line::from("  r                  sample now, don't wait for the tick"),
         Line::from("  s                  sort processes by CPU or by memory"),
+        Line::from("  f                  filter processes by name or command line"),
         Line::from("  tab / 1-4          switch pane (narrow terminals only)"),
         Line::from("  Ctrl-L             force a full repaint"),
         Line::from("  ?                  close this"),

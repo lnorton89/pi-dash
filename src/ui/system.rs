@@ -22,6 +22,7 @@ use super::gauge::{self, Glyphs, Ramp};
 use super::{field, header_style, pane_block, push_if_fits, threshold_color, DIM, GUTTER};
 use crate::app::App;
 use crate::format::{clip, human_kb, uptime};
+use crate::panes::system::SystemPane;
 
 /// The aggregate CPU and memory meters size themselves to the pane, within
 /// these bounds. Below the minimum a meter is too coarse to read a trend off;
@@ -124,13 +125,27 @@ fn disk_column<'a>(
 /// Mount-label column. Wide enough for `firmware`.
 const DISK_NAME_W: usize = 10;
 
-/// The COMMAND LINE heading, or nothing when that column was dropped.
-fn cmdline_heading(cmdline_w: usize) -> &'static str {
-    if cmdline_w > 0 {
-        "COMMAND LINE"
-    } else {
-        ""
+/// The COMMAND LINE heading, or the filter that has replaced it.
+///
+/// While the filter is being typed it carries a cursor, because a text field
+/// with no caret is one you cannot tell is focused -- and this one takes over
+/// the whole keyboard while it is open.
+fn cmdline_heading(system: &SystemPane, cmdline_w: usize, glyphs: Glyphs) -> String {
+    if cmdline_w == 0 {
+        return String::new();
     }
+    if system.filter.is_empty() && !system.filter_editing {
+        return "COMMAND LINE".to_string();
+    }
+    let caret = match (system.filter_editing, glyphs) {
+        (false, _) => "",
+        (true, Glyphs::Unicode) => "▏",
+        (true, Glyphs::Ascii) => "_",
+    };
+    crate::format::clip(
+        &format!("filter: {}{caret}", system.filter),
+        cmdline_w.saturating_sub(1),
+    )
 }
 
 /// Process table columns. The command name gets whatever is left.
@@ -141,6 +156,17 @@ const CPU_NUM_W: usize = 6;
 const PROC_BAR_W: usize = 10;
 /// Below this the per-process meter is dropped and the name keeps the room.
 const PROC_BAR_MIN_COLS: usize = 66;
+/// btop's `Threads` column. Four digits covers anything a Pi runs.
+const THREADS_W: usize = 5;
+/// btop's `User`. Wide enough for `messagebus`, which is on every one of these
+/// boxes, and long enough that a container's bare uid never wraps.
+const USER_W: usize = 11;
+/// Below these the two extra columns are dropped, widest-cost first. Both are
+/// context rather than the thing you scan for, so they go before the command
+/// line does.
+const PROC_USER_MIN_COLS: usize = 118;
+const PROC_THREADS_MIN_COLS: usize = 104;
+
 /// The comm column, once there is a command line beside it to be greedy.
 const PROC_NAME_W: usize = 18;
 /// Less command line than this shows a truncated executable path and none of
@@ -404,6 +430,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if rows > 0 {
         let cols = proc_columns(width);
         let (name_w, cmd_w, bar_w) = (cols.name, cols.cmdline, cols.bar);
+        let (threads_w, user_w) = (cols.threads, cols.user);
         // CPU% is right-aligned over the numbers below it, not left over the
         // space before them.
         //
@@ -423,13 +450,38 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             Span::styled(text, style)
         };
+        // btop's `0/204`, in the heading rather than the footer this pane does
+        // not have. A table showing the busiest five of four hundred looks
+        // exactly like a table showing all five a box is running, and the
+        // difference matters when you are deciding whether the thing you are
+        // hunting is simply below the fold.
+        let shown = system.procs.len().min(rows);
+        let count = if system.total_procs > shown {
+            format!("{shown}/{}", system.total_procs)
+        } else {
+            String::new()
+        };
         lines.push(Line::from(vec![
             Span::styled(
+                format!("  {:<PID_W$}{:<name_w$}", "PID", "COMMAND"),
+                header_style(),
+            ),
+            // A filter that is on and not shown is a table quietly lying about
+            // what the box is running, so it takes the command-line heading's
+            // place rather than waiting for a spare corner.
+            Span::styled(
+                format!("{:<cmd_w$}", cmdline_heading(system, cmd_w, glyphs)),
+                if system.filter.is_empty() {
+                    header_style()
+                } else {
+                    header_style().fg(app.accent)
+                },
+            ),
+            Span::styled(
                 format!(
-                    "  {:<PID_W$}{:<name_w$}{:<cmd_w$}",
-                    "PID",
-                    "COMMAND",
-                    cmdline_heading(cmd_w)
+                    "{:<threads_w$}{:<user_w$}",
+                    if threads_w > 0 { "THR" } else { "" },
+                    if user_w > 0 { "USER" } else { "" }
                 ),
                 header_style(),
             ),
@@ -439,6 +491,15 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
             heading("MEM"),
             Span::styled("   ", header_style()),
             heading("CPU%"),
+            // After the meter, where the rows below have nothing.
+            Span::styled(
+                if bar_w > count.len() {
+                    format!("{count:>bar_w$}")
+                } else {
+                    String::new()
+                },
+                header_style(),
+            ),
         ]));
         // Only the busiest are listed. A Pi runs a couple of hundred mostly
         // idle processes and a full table is a scrolling wall you never read;
@@ -473,6 +534,26 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 spans.push(Span::styled(
                     format!("{:<cmd_w$}", crate::format::clip(&text, cmd_w - 1)),
                     style,
+                ));
+            }
+            if threads_w > 0 {
+                // Dim, and blank at one: almost everything on this box is
+                // single-threaded, and a column of 1s is a column of noise
+                // with the interesting numbers hidden in it.
+                let text = if proc.threads > 1 {
+                    proc.threads.to_string()
+                } else {
+                    String::new()
+                };
+                spans.push(Span::styled(
+                    format!("{text:<threads_w$}"),
+                    Style::default().fg(DIM),
+                ));
+            }
+            if user_w > 0 {
+                spans.push(Span::styled(
+                    format!("{:<user_w$}", crate::format::clip(&proc.user, user_w - 1)),
+                    Style::default().fg(DIM),
                 ));
             }
             spans.push(Span::raw(format!("{:>MEM_W$}   ", human_kb(proc.rss_kb))));
@@ -706,6 +787,9 @@ pub(crate) struct ProcColumns {
     pub(crate) cmdline: usize,
     /// Zero on a pane too narrow for the per-process meter.
     pub(crate) bar: usize,
+    /// Zero where the pane could not afford the column.
+    pub(crate) threads: usize,
+    pub(crate) user: usize,
 }
 
 /// Lays out the process table.
@@ -724,7 +808,20 @@ fn proc_columns(width: usize) -> ProcColumns {
     } else {
         0
     };
-    let fixed = PID_W + MEM_W + 3 + CPU_NUM_W + bar;
+    // Dropped widest-first, and both before the command line: threads and the
+    // owning account are context for a row you have already found, whereas the
+    // command line is how you find it.
+    let user = if width >= PROC_USER_MIN_COLS {
+        USER_W
+    } else {
+        0
+    };
+    let threads = if width >= PROC_THREADS_MIN_COLS {
+        THREADS_W
+    } else {
+        0
+    };
+    let fixed = PID_W + MEM_W + 3 + CPU_NUM_W + bar + threads + user;
     let flexible = available.saturating_sub(fixed);
 
     if flexible >= PROC_NAME_W + PROC_CMDLINE_MIN {
@@ -732,12 +829,16 @@ fn proc_columns(width: usize) -> ProcColumns {
             name: PROC_NAME_W,
             cmdline: flexible - PROC_NAME_W,
             bar,
+            threads,
+            user,
         }
     } else {
         ProcColumns {
             name: flexible.max(8),
             cmdline: 0,
             bar,
+            threads,
+            user,
         }
     }
 }

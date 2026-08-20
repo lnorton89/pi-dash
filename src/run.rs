@@ -128,6 +128,36 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         return Action::Ignore;
     }
 
+    // Typing a filter comes before every other binding, because while it is
+    // open the keyboard means letters. `q` has to be a q, or the filter cannot
+    // spell `dump1090` without quitting halfway through.
+    if app.system.filter_editing {
+        // Compared rather than matched, for the same reason the bindings
+        // below are: KeyCode has thirty-odd variants and a wildcard over them
+        // hides whichever one gets added next.
+        if let KeyCode::Char(c) = key.code {
+            app.system.filter.push(c);
+            return Action::SampleNow;
+        }
+        // Enter keeps what was typed and hands the keyboard back. Escape
+        // clears it, so there is always a way out that also undoes the thing
+        // you are in the middle of.
+        if key.code == KeyCode::Enter {
+            app.system.filter_editing = false;
+            return Action::Redraw;
+        }
+        if key.code == KeyCode::Esc {
+            app.system.filter_editing = false;
+            app.system.filter.clear();
+            return Action::SampleNow;
+        }
+        if key.code == KeyCode::Backspace {
+            app.system.filter.pop();
+            return Action::SampleNow;
+        }
+        return Action::Ignore;
+    }
+
     if app.mode == Mode::Help {
         // Any key closes help — it is a reference card, not a mode you work in.
         app.mode = Mode::Normal;
@@ -150,6 +180,12 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Action {
             // tick. The read is cached, so this costs almost nothing.
             's' => {
                 app.system.sort = app.system.sort.next();
+                Action::SampleNow
+            }
+            // btop's key. Re-samples on the way in so a filter set while the
+            // command lines are shallow does not match against half a table.
+            'f' => {
+                app.system.filter_editing = true;
                 Action::SampleNow
             }
             'l' => focus_next(app),
@@ -264,6 +300,68 @@ mod tests {
         assert_eq!(app.system.sort, SortBy::Memory);
         handle_key(&mut app, press(KeyCode::Char('s')));
         assert_eq!(app.system.sort, SortBy::Cpu);
+    }
+
+    #[test]
+    fn a_filter_takes_the_whole_keyboard_while_it_is_open() {
+        let mut app = test_app();
+        assert_eq!(
+            handle_key(&mut app, press(KeyCode::Char('f'))),
+            Action::SampleNow
+        );
+        assert!(app.system.filter_editing);
+
+        // The one that matters. Every letter is a letter now -- `q` has to be
+        // a q or the filter cannot spell `dump1090` without quitting halfway
+        // through, and `s` cannot silently reorder the table underneath it.
+        for c in ['d', 'u', 'm', 'p', 'q', 's', 'r', '?'] {
+            assert_ne!(handle_key(&mut app, press(KeyCode::Char(c))), Action::Quit);
+        }
+        assert_eq!(app.system.filter, "dumpqsr?");
+        assert_eq!(app.mode, Mode::Normal, "? must not open help mid-word");
+
+        handle_key(&mut app, press(KeyCode::Backspace));
+        assert_eq!(app.system.filter, "dumpqsr");
+
+        // Enter keeps what was typed and hands the keyboard back.
+        assert_eq!(handle_key(&mut app, press(KeyCode::Enter)), Action::Redraw);
+        assert!(!app.system.filter_editing);
+        assert_eq!(app.system.filter, "dumpqsr");
+        // And now q means quit again.
+        assert_eq!(
+            handle_key(&mut app, press(KeyCode::Char('q'))),
+            Action::Quit
+        );
+    }
+
+    #[test]
+    fn escape_clears_the_filter_rather_than_quitting_the_dashboard() {
+        // Escape quits from the normal keyboard, so inside the filter it has
+        // to mean something else -- and "undo the thing you are in the middle
+        // of" is the only reading that does not lose your session.
+        let mut app = test_app();
+        handle_key(&mut app, press(KeyCode::Char('f')));
+        for c in ['n', 'g', 'i', 'n', 'x'] {
+            handle_key(&mut app, press(KeyCode::Char(c)));
+        }
+        assert_eq!(app.system.filter, "nginx");
+
+        assert_eq!(handle_key(&mut app, press(KeyCode::Esc)), Action::SampleNow);
+        assert!(!app.system.filter_editing);
+        assert!(app.system.filter.is_empty(), "escape undoes the filter");
+        // Outside the filter it goes back to meaning quit.
+        assert_eq!(handle_key(&mut app, press(KeyCode::Esc)), Action::Quit);
+    }
+
+    #[test]
+    fn ctrl_c_still_quits_out_of_a_filter() {
+        // The modifier branch runs before the filter does, which is the whole
+        // reason it is written first: a text field you cannot Ctrl-C out of is
+        // a hung terminal.
+        let mut app = test_app();
+        handle_key(&mut app, press(KeyCode::Char('f')));
+        let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(handle_key(&mut app, ctrl_c), Action::Quit);
     }
 
     #[test]
