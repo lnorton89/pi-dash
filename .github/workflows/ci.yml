@@ -1,0 +1,118 @@
+# Enforcement for the lint table in Cargo.toml.
+#
+# That table denies warnings, unwrap, expect, panic and a wildcard match over
+# somebody else's enum. All of it is worth exactly as much as whatever runs it,
+# and until this file existed the only thing that ran it was whoever remembered
+# to. A rule nobody checks is a comment.
+#
+# The runner is Linux on purpose. Half of this crate reads /proc, /sys and
+# vcgencmd, and those tests do nothing at all on a developer's Windows or macOS
+# box -- read_process_stats returns an empty vec, page_size falls back, df does
+# not run. On ubuntu-latest they read a real kernel, which is closer to the Pi
+# than any machine this is written on.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push while the first is still building only needs the newer answer.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Nothing here is rebuilt incrementally: every job starts from an empty target
+  # directory, so the cache is pure cost.
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deliberately not pinned. The Pi builds this with whatever rustup gives
+      # it, so CI should fail here rather than let the unit be the first to
+      # find out. The cost of that choice is real: `warnings = "deny"` means a
+      # toolchain that invents a lint can turn this red with no code change.
+      # Pin a toolchain here if that ever stops being the right trade.
+      - name: Use current stable Rust
+        run: |
+          rustup update --no-self-update stable
+          rustup default stable
+          rustup component add rustfmt clippy
+          rustc --version && cargo --version
+
+      # --locked, so a lockfile that no longer matches Cargo.toml is a failure
+      # here rather than a surprise on the Pi with no network.
+      - name: Formatting
+        run: cargo fmt --check
+
+      # No `-- -D warnings`: the [lints] table already denies them, and passing
+      # it again on the command line hides whether the table is doing its job.
+      - name: Lints
+        run: cargo clippy --all-targets --locked
+
+      - name: Tests
+        run: cargo test --locked
+
+      # The readers, against a real kernel. --once always exits 0, so this
+      # fails only if a pane genuinely cannot render -- which is the one thing
+      # a fixture-driven test cannot tell us, because every fixture here was
+      # written by the same person who wrote the parser.
+      #
+      # There is no ClassG API on the runner, and that is part of the test:
+      # the pane is supposed to degrade into a hint rather than fail.
+      - name: Render a snapshot against real /proc
+        run: cargo run --locked --quiet -- --once
+
+      - name: Resolve configuration
+        run: cargo run --locked --quiet -- --print-config
+
+      # --check reports on the machine it runs on, and a GitHub runner has no
+      # ClassG on it, so the honest expectation is 2 (down) and a line saying
+      # the API is not answering. Asserting that is worth more than skipping
+      # it: it pins the exit codes cron depends on.
+      - name: Check reports a missing API as down
+        run: |
+          set +e
+          output=$(cargo run --locked --quiet -- --check)
+          code=$?
+          set -e
+          echo "exit=$code: $output"
+          test "$code" -eq 2
+          case "$output" in
+            "down: the API is not answering"*) ;;
+            *) echo "unexpected verdict line"; exit 1 ;;
+          esac
+
+  # Cheap, and both of these have already cost real time on this project: a
+  # rustfmt run from Windows rewrote every file it touched to CRLF in an LF
+  # repository, and a NUL byte typed into a source file made grep refuse to
+  # search it, which led directly to a function being misdiagnosed.
+  encoding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tracked sources are LF and free of NUL bytes
+        run: |
+          python3 - <<'PY'
+          import subprocess, sys
+
+          files = subprocess.check_output(["git", "ls-files"], text=True).split()
+          problems = []
+          for name in files:
+              with open(name, "rb") as handle:
+                  raw = handle.read()
+              if b"\r\n" in raw:
+                  problems.append(f"{name}: CRLF line endings")
+              if b"\x00" in raw:
+                  problems.append(f"{name}: NUL byte")
+          if problems:
+              print("\n".join(problems))
+              sys.exit(1)
+          print(f"{len(files)} tracked files, all LF, no NUL bytes")
+          PY

@@ -1,5 +1,7 @@
 # pi-dash
 
+[![CI](https://github.com/lnorton89/pi-dash/actions/workflows/ci.yml/badge.svg)](https://github.com/lnorton89/pi-dash/actions/workflows/ci.yml)
+
 A one-window terminal dashboard for the Raspberry Pi running
 [ClassG](https://github.com/) — the three things a process monitor cannot tell
 you, plus a system summary so you do not need one.
@@ -334,15 +336,29 @@ linking rustls to reach `127.0.0.1` is not a trade worth making on a Pi, so an
 
 ```sh
 cargo fmt --check
-cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets
 cargo test
 ```
 
+No `-- -D warnings`: the `[lints]` table in `Cargo.toml` already denies them,
+along with `unwrap`, `expect`, `panic`, and a wildcard match over somebody
+else's enum. Passing the flag again on the command line would hide whether that
+table is doing its job.
+
 Every parser has fixture-driven tests — throttle decoding, `/proc/net/dev`,
-`/proc/stat` deltas, `/proc/<pid>/stat` with a comm full of parentheses,
-`/proc/diskstats` partition de-duplication, USB ID matching — and the panes
-themselves are rendered through ratatui's `TestBackend`, so a layout that
-truncates a throttle verdict fails the build rather than the operator.
+`/proc/stat` deltas, `/proc/<pid>/stat` with a comm full of parentheses and
+with a line truncated mid-read, `/proc/diskstats` partition de-duplication, USB
+ID matching — and the panes themselves are rendered through ratatui's
+`TestBackend`, so a layout that truncates a throttle verdict fails the build
+rather than the operator.
+
+CI runs all three on Linux, which matters more than it sounds: half of this
+crate reads `/proc`, `/sys` and `vcgencmd`, and on a Windows or macOS
+development box those tests exercise the fallbacks rather than the readers. It
+also renders `--once` against a real kernel and asserts that `--check` reports
+a missing API as `down` with exit 2, and it fails on a CRLF line ending or a
+NUL byte in a tracked file — both of which have already cost this project real
+time.
 
 ## Relationship to the classg repo
 
