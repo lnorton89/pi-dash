@@ -180,7 +180,9 @@ cargo build --release
 
 Keys: `q`/`Esc`/`Ctrl-C` quit · `r` sample now · `s` sort the process table by
 CPU or by memory · `f` filter it by name or command line · `?` help ·
-`Ctrl-L` repaint · `Tab`/`1`-`4` switch pane (narrow terminals only).
+`Ctrl-L` repaint · `Up`/`Down`/`PgUp`/`PgDn`/`Home` scroll the process table ·
+`Tab`/`1`-`4` switch pane. Each pane's number is shown in its own title, so the
+keys do not need looking up.
 
 While a filter is open every key is a letter, so `q` types a q rather than
 quitting — `Enter` keeps the filter, `Esc` clears it, and `Ctrl-C` still gets

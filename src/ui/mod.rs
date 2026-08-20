@@ -259,6 +259,47 @@ pub(crate) fn pane_block<'a>(title: &'a str, border: Color, glyphs: Glyphs) -> B
         .title_alignment(Alignment::Left)
 }
 
+/// The same, with btop's hotkey tab: the pane's own number, accented, ahead of
+/// its name.
+///
+/// `Tab` and `1`-`4` have switched panes since the rewrite and nothing on
+/// screen has ever said which number belongs to which pane -- a binding you
+/// have to read the help card to discover is one nobody uses. btop puts its
+/// hotkeys in the box titles for exactly this reason.
+///
+/// Numbered on every terminal, not only the narrow ones that need the keys.
+/// A title that gains and loses a digit as the window resizes is a title you
+/// stop reading.
+pub(crate) fn numbered_pane_block<'a>(
+    pane: Pane,
+    title: &'a str,
+    accent: Color,
+    glyphs: Glyphs,
+) -> Block<'a> {
+    let index = Pane::ALL.iter().position(|p| *p == pane).unwrap_or(0) + 1;
+    // Built as one title rather than layered on top of pane_block's, because
+    // two left-aligned titles are laid out in the order they were added and
+    // the number has to come first to read as a key.
+    Block::default()
+        .borders(Borders::ALL)
+        .border_set(glyphs.border_set())
+        .border_style(Style::default().fg(accent))
+        .title(Line::from(vec![
+            Span::raw(" "),
+            Span::styled(
+                index.to_string(),
+                Style::default().fg(accent).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {} ", title.trim()),
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]))
+        .title_alignment(Alignment::Left)
+}
+
 /// A label/value line, with the label in the fixed-width gutter every pane
 /// shares so values line up down the whole column.
 pub(crate) fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {

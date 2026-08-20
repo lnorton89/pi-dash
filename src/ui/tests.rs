@@ -1645,3 +1645,89 @@ fn no_column_of_the_band_ever_overruns_the_pane() {
         }
     }
 }
+
+/// Forty processes, so there is always more table than pane.
+fn with_many_procs(app: &mut App) {
+    use crate::panes::system::ProcRow;
+    app.system.procs = (0..40)
+        .map(|i| ProcRow {
+            pid: 1000 + i,
+            name: format!("proc{i}"),
+            state: 'S',
+            cpu_pct: (40 - i) as f64,
+            rss_kb: 1000,
+            threads: 1,
+            user: "root".into(),
+            cmdline: format!("/usr/bin/proc{i} --run"),
+        })
+        .collect();
+    app.system.total_procs = 374;
+}
+
+#[test]
+fn the_process_table_scrolls_and_says_where_in_the_list_it_is() {
+    // 374 processes and thirty rows meant the other 340 were unreachable
+    // rather than merely below the fold.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_many_procs(&mut app);
+
+    let top = render(&mut app, 200, 24);
+    assert!(contains(&top, "proc0 "), "{}", top.join("\n"));
+
+    app.system.scroll = 12;
+    let scrolled = render(&mut app, 200, 24);
+    assert!(!contains(&scrolled, "proc0 "), "the top rows scrolled away");
+    assert!(contains(&scrolled, "proc12"));
+    // Where in the list, not just how much of it.
+    assert!(contains(&scrolled, "13-"), "{}", scrolled.join("\n"));
+    assert!(contains(&scrolled, "/374"));
+}
+
+#[test]
+fn scrolling_past_the_end_parks_the_last_row_rather_than_emptying_the_table() {
+    let mut app = test_app();
+    with_load(&mut app);
+    with_many_procs(&mut app);
+    app.system.scroll = 9_999;
+    let rows = render(&mut app, 200, 24);
+    assert!(contains(&rows, "proc39"), "the last row is still drawn");
+}
+
+#[test]
+fn a_table_with_nothing_below_the_fold_draws_no_scrollbar() {
+    // A full-height thumb beside a complete table is a control that looks like
+    // it does something.
+    let mut app = test_app();
+    with_load(&mut app);
+    // with_load leaves two processes, which any of these panes can show whole.
+    let rows = render(&mut app, 200, 40);
+    let bars = rows.iter().filter(|r| r.contains('\u{2588}')).count();
+    with_many_procs(&mut app);
+    let more = render(&mut app, 200, 40);
+    assert!(
+        more.iter().filter(|r| r.contains('\u{2588}')).count() > bars,
+        "a scrollbar appears once there is something to scroll to"
+    );
+}
+
+#[test]
+fn every_pane_title_carries_the_number_that_selects_it() {
+    // Tab and 1-4 have switched panes since the rewrite and nothing on screen
+    // ever said which number belonged to which pane.
+    let mut app = test_app();
+    with_load(&mut app);
+    let rows = render(&mut app, 200, 40);
+    for (n, name) in [
+        (1, "System"),
+        (2, "Pi health"),
+        (3, "Radios"),
+        (4, "ClassG"),
+    ] {
+        assert!(
+            rows.iter().any(|r| r.contains(&format!("{n} {name}"))),
+            "pane {n} is not numbered: {}",
+            rows.join("\n")
+        );
+    }
+}

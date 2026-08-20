@@ -115,6 +115,11 @@ enum Action {
 // reason that it hides a new variant instead of surfacing it. Spelling all
 // thirty out to reach `Action::Ignore` would be worse than either. Comparing
 // the handful we do bind says the same thing in the space it deserves.
+/// Rows a page key moves. Not the pane's height, which the key handler does
+/// not know: a fixed jump that is roughly a screen beats one that is exactly a
+/// screen but needs the renderer to tell the keyboard how tall it is.
+const PAGE: usize = 20;
+
 fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         if key.code == KeyCode::Char('c') {
@@ -204,6 +209,31 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     if key.code == KeyCode::Esc {
         return Action::Quit;
     }
+    // The process table scrolls. Up and Down were unbound, and left/right
+    // already move between panes, so this costs nothing and turns a table
+    // showing thirty of three hundred and seventy-four into one that can reach
+    // the other three hundred and forty.
+    if key.code == KeyCode::Up {
+        app.system.scroll_by(-1);
+        return Action::Redraw;
+    }
+    if key.code == KeyCode::Down {
+        app.system.scroll_by(1);
+        return Action::Redraw;
+    }
+    if key.code == KeyCode::PageUp {
+        app.system.scroll_by(-(PAGE as isize));
+        return Action::Redraw;
+    }
+    if key.code == KeyCode::PageDown {
+        app.system.scroll_by(PAGE as isize);
+        return Action::Redraw;
+    }
+    if key.code == KeyCode::Home {
+        app.system.scroll = 0;
+        return Action::Redraw;
+    }
+
     if matches!(key.code, KeyCode::Tab | KeyCode::Right) {
         return focus_next(app);
     }
@@ -362,6 +392,44 @@ mod tests {
         handle_key(&mut app, press(KeyCode::Char('f')));
         let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
         assert_eq!(handle_key(&mut app, ctrl_c), Action::Quit);
+    }
+
+    #[test]
+    fn the_arrows_and_page_keys_move_the_process_table() {
+        use crate::panes::system::ProcRow;
+        let mut app = test_app();
+        app.system.procs = (0..100).map(|_| ProcRow::default()).collect();
+
+        assert_eq!(handle_key(&mut app, press(KeyCode::Down)), Action::Redraw);
+        assert_eq!(app.system.scroll, 1);
+        handle_key(&mut app, press(KeyCode::PageDown));
+        assert_eq!(app.system.scroll, 1 + PAGE);
+
+        handle_key(&mut app, press(KeyCode::Up));
+        assert_eq!(app.system.scroll, PAGE);
+        handle_key(&mut app, press(KeyCode::Home));
+        assert_eq!(app.system.scroll, 0);
+
+        // Neither end runs away: up from the top stays at the top, and a page
+        // down past the end stops on the last row.
+        handle_key(&mut app, press(KeyCode::Up));
+        handle_key(&mut app, press(KeyCode::PageUp));
+        assert_eq!(app.system.scroll, 0);
+        for _ in 0..20 {
+            handle_key(&mut app, press(KeyCode::PageDown));
+        }
+        assert_eq!(app.system.scroll, 99);
+    }
+
+    #[test]
+    fn scrolling_an_empty_table_does_not_move_anywhere() {
+        // No processes at all is what a non-Linux box looks like, and
+        // saturating arithmetic on an empty list is where an index panics.
+        let mut app = test_app();
+        assert!(app.system.procs.is_empty());
+        handle_key(&mut app, press(KeyCode::Down));
+        handle_key(&mut app, press(KeyCode::PageDown));
+        assert_eq!(app.system.scroll, 0);
     }
 
     #[test]

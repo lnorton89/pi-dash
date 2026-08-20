@@ -23,8 +23,8 @@ use ratatui::{
     Frame,
 };
 
-use super::{pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
-use crate::app::App;
+use super::{numbered_pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
+use crate::app::{App, Pane};
 use crate::format::{clip, coarse_uptime, compact_count, human_bytes, short_age};
 use crate::panes::classg::{
     collapse_runs, detection_class_label, Capture, CredentialKind, Detection, DetectionPage,
@@ -39,7 +39,7 @@ const SENSOR_COLUMN_AT: usize = 54;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let title = format!(" ClassG  {} ", app.config.api.trim_start_matches("http://"));
-    let block = pane_block(&title, app.accent, app.glyphs);
+    let block = numbered_pane_block(Pane::Classg, &title, app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {

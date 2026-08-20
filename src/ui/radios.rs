@@ -13,8 +13,8 @@ use ratatui::{
     Frame,
 };
 
-use super::{pane_block, table_header, BAD, DIM, OK, WARN};
-use crate::app::App;
+use super::{numbered_pane_block, table_header, BAD, DIM, OK, WARN};
+use crate::app::{App, Pane};
 use crate::format::{clip, human_rate_compact};
 use crate::panes::radios::{Iface, WirelessMode};
 
@@ -30,7 +30,7 @@ const CH_W: usize = 5;
 const DRIVER_MIN_COLS: usize = 12;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let block = pane_block(" Radios & network ", app.accent, app.glyphs);
+    let block = numbered_pane_block(Pane::Radios, " Radios & network ", app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     if inner.height == 0 {

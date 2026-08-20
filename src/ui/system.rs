@@ -19,8 +19,8 @@ use ratatui::{
 };
 
 use super::gauge::{self, Glyphs, Ramp};
-use super::{field, header_style, pane_block, push_if_fits, threshold_color, DIM, GUTTER};
-use crate::app::App;
+use super::{field, header_style, numbered_pane_block, push_if_fits, threshold_color, DIM, GUTTER};
+use crate::app::{App, Pane};
 use crate::format::{clip, human_bytes, human_kb, human_rate_compact, uptime};
 use crate::panes::system::SystemPane;
 
@@ -49,6 +49,40 @@ const NET_ROWS: usize = 3;
 /// when something is recording to a stick. Past that this is a process table
 /// with a disk list on top of it.
 const DISK_ROWS: usize = 3;
+
+/// Whether row `index` of the visible table falls inside the scrollbar thumb.
+///
+/// The thumb is sized by what fraction of the list is on screen and positioned
+/// by how far down it starts, which is the whole content of a scrollbar: how
+/// much is there, and where you are in it.
+fn in_thumb(index: usize, rows: usize, top: usize, total: usize) -> bool {
+    if total <= rows || rows == 0 {
+        return true;
+    }
+    // At least one row, or a long list gives a thumb of nothing.
+    let size = ((rows * rows) / total).max(1);
+    let span = rows.saturating_sub(size);
+    let start = if total > rows {
+        (top * span + (total - rows) / 2) / (total - rows)
+    } else {
+        0
+    };
+    index >= start && index < start + size
+}
+
+fn scrollbar_cell(
+    index: usize,
+    rows: usize,
+    top: usize,
+    total: usize,
+    glyphs: gauge::Glyphs,
+) -> String {
+    if in_thumb(index, rows, top, total) {
+        glyphs.full().to_string()
+    } else {
+        glyphs.track().to_string()
+    }
+}
 
 /// The widest line in a column, in characters.
 ///
@@ -280,7 +314,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let system = &app.system;
     let glyphs = app.glyphs;
 
-    let mut block = pane_block(" System ", app.accent, app.glyphs);
+    let mut block = numbered_pane_block(Pane::System, " System ", app.accent, app.glyphs);
     // Uptime rides in the top-right of the frame, as it does in btop. It is
     // the one number here that never changes meaningfully between frames, so
     // it costs nothing to put it where it is out of the way. Only when the
@@ -569,9 +603,19 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // exactly like a table showing all five a box is running, and the
         // difference matters when you are deciding whether the thing you are
         // hunting is simply below the fold.
-        let shown = system.procs.len().min(rows);
+        // Held to what can be drawn, so scrolling to the bottom parks the last
+        // row on screen rather than scrolling past into an empty table.
+        let top = system.scroll.min(
+            system
+                .procs
+                .len()
+                .saturating_sub(rows.min(system.procs.len())),
+        );
+        let shown = system.procs.len().saturating_sub(top).min(rows);
         let count = if system.total_procs > shown {
-            format!("{shown}/{}", system.total_procs)
+            // Where in the list, not just how much of it: `31-60/374` is the
+            // question a scrollbar answers and a bare count does not.
+            format!("{}-{}/{}", top + 1, top + shown, system.total_procs)
         } else {
             String::new()
         };
@@ -619,7 +663,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // idle processes and a full table is a scrolling wall you never read;
         // what you want to know is which one just woke up.
         let shade = gauge::row_shade();
-        for (index, proc) in system.procs.iter().take(rows).enumerate() {
+        for (index, proc) in system.procs.iter().skip(top).take(rows).enumerate() {
             let mut spans = vec![
                 Span::styled(format!("  {:<PID_W$}", proc.pid), Style::default().fg(DIM)),
                 Span::styled(
@@ -680,6 +724,19 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 // means. A four-thread build reads 380% and pegs the bar —
                 // that is the honest reading, not a clipped one.
                 spans.extend(gauge::bar(proc.cpu_pct / 100.0, bar_w, glyphs, Ramp::Load));
+            }
+            // btop's scrollbar, one column at the right. Only where there is
+            // something off screen: a full-height thumb next to a table with
+            // nothing below it is a control that looks like it does something.
+            if system.procs.len() > rows {
+                spans.push(Span::styled(
+                    scrollbar_cell(index, rows, top, system.procs.len(), glyphs),
+                    Style::default().fg(if in_thumb(index, rows, top, system.procs.len()) {
+                        app.accent
+                    } else {
+                        gauge::track()
+                    }),
+                ));
             }
             let mut line = Line::from(spans);
             // Alternating rows, as btop stripes its process list. Sixty rows

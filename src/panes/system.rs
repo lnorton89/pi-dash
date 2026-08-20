@@ -399,6 +399,10 @@ pub(crate) struct SystemPane {
     /// True while the filter is being typed, which is what makes the keyboard
     /// mean letters instead of commands.
     pub(crate) filter_editing: bool,
+    /// First process row on screen. btop scrolls its table and this could not,
+    /// which on a box running 374 of them meant the other 340 were unreachable
+    /// rather than merely below the fold.
+    pub(crate) scroll: usize,
     /// Processes before the filter took any away, for the `12/374` in the
     /// heading. Without it a filtered table and a quiet box look identical.
     pub(crate) total_procs: usize,
@@ -435,6 +439,7 @@ impl Default for SystemPane {
             users: HashMap::new(),
             filter: String::new(),
             filter_editing: false,
+            scroll: 0,
             total_procs: 0,
             sort: SortBy::default(),
             cpu_pct: None,
@@ -453,6 +458,16 @@ impl Default for SystemPane {
 }
 
 impl SystemPane {
+    /// Moves the process table by `delta` rows, stopping at either end.
+    ///
+    /// Clamped against the row count rather than the visible height, which is
+    /// not known here -- the renderer holds the table to whatever it can draw,
+    /// so the worst an over-scroll does is park the last row at the top.
+    pub(crate) fn scroll_by(&mut self, delta: isize) {
+        let last = self.procs.len().saturating_sub(1) as isize;
+        self.scroll = (self.scroll as isize + delta).clamp(0, last.max(0)) as usize;
+    }
+
     pub(crate) fn sample(&mut self, now: Instant) {
         let Some(stat) = read_trimmed("/proc/stat") else {
             self.unavailable = Some("/proc/stat is not readable — not a Linux box?".to_string());
@@ -598,6 +613,10 @@ impl SystemPane {
                 let needle = self.filter.to_lowercase();
                 self.procs.retain(|row| matches_filter(row, &needle));
             }
+            // A filter that removes everything below the current position, or
+            // a list that simply shrank, would otherwise leave the table
+            // scrolled past its own end and drawing nothing at all.
+            self.scroll = self.scroll.min(self.procs.len().saturating_sub(1));
         }
         self.prev_proc_ticks = stats.iter().map(|s| (s.pid, s.cpu_ticks)).collect();
     }

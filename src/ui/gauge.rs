@@ -57,7 +57,7 @@ impl Glyphs {
     }
 
     /// The character a fully-filled meter cell uses.
-    fn full(self) -> char {
+    pub(crate) fn full(self) -> char {
         match self {
             Glyphs::Unicode => '█',
             Glyphs::Ascii => '#',
@@ -66,7 +66,7 @@ impl Glyphs {
 
     /// The unfilled track behind a meter. Drawn, not left blank: an empty gap
     /// gives no sense of how much headroom is left.
-    fn track(self) -> char {
+    pub(crate) fn track(self) -> char {
         match self {
             Glyphs::Unicode => '░',
             Glyphs::Ascii => '.',
