@@ -1674,6 +1674,462 @@ mod tests {
         assert_eq!(envelope.error.message, "log in to continue");
     }
 
+    /// What actually goes over the socket.
+    ///
+    /// Everything else in this file tests a parser against a string. None of
+    /// it can tell you that the bearer token reaches the wire, that a 401 is
+    /// read out of the contract envelope rather than off the status line, or
+    /// that the track query carries the state filter it is supposed to — and
+    /// those are the parts written most recently and understood least well.
+    ///
+    /// The server is std::net and forty lines. A test that needed a
+    /// dependency to exist would not be worth this much.
+    mod over_http {
+        use super::*;
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+        use std::sync::Mutex;
+
+        /// One request as the server saw it: the target, and the headers that
+        /// came with it.
+        #[derive(Debug, Clone)]
+        struct Seen {
+            target: String,
+            headers: Vec<String>,
+        }
+
+        impl Seen {
+            /// A header's value, matched case-insensitively because that is
+            /// how HTTP works and how a client library is free to spell it.
+            fn header(&self, name: &str) -> Option<&str> {
+                let name = name.to_ascii_lowercase();
+                self.headers.iter().find_map(|line| {
+                    let (key, value) = line.split_once(':')?;
+                    (key.trim().to_ascii_lowercase() == name).then(|| value.trim())
+                })
+            }
+        }
+
+        /// A throwaway API on loopback. Routes are matched by path prefix, so
+        /// a query string does not have to be spelled out to be recorded.
+        struct Stub {
+            port: u16,
+            seen: Arc<Mutex<Vec<Seen>>>,
+            shutdown: Arc<AtomicBool>,
+        }
+
+        impl Drop for Stub {
+            fn drop(&mut self) {
+                self.shutdown.store(true, Ordering::Relaxed);
+            }
+        }
+
+        impl Stub {
+            fn start(routes: &'static [(&'static str, u16, &'static str)]) -> Stub {
+                // Port 0: the kernel picks a free one, so tests can run
+                // beside each other without agreeing on a number.
+                let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+                let port = listener.local_addr().expect("local addr").port();
+                listener.set_nonblocking(true).expect("non-blocking");
+
+                let seen = Arc::new(Mutex::new(Vec::new()));
+                let shutdown = Arc::new(AtomicBool::new(false));
+                let worker_seen = Arc::clone(&seen);
+                let worker_shutdown = Arc::clone(&shutdown);
+
+                std::thread::spawn(move || {
+                    while !worker_shutdown.load(Ordering::Relaxed) {
+                        match listener.accept() {
+                            Ok((stream, _)) => serve(stream, routes, &worker_seen),
+                            // Nothing waiting. Sleeping beats spinning a core
+                            // for the length of the test suite.
+                            Err(_) => std::thread::sleep(Duration::from_millis(2)),
+                        }
+                    }
+                });
+
+                Stub {
+                    port,
+                    seen,
+                    shutdown,
+                }
+            }
+
+            fn base(&self) -> String {
+                format!("http://127.0.0.1:{}", self.port)
+            }
+
+            fn requests(&self) -> Vec<Seen> {
+                self.seen.lock().map(|v| v.clone()).unwrap_or_default()
+            }
+
+            /// The first request whose target starts with `prefix`.
+            fn request_for(&self, prefix: &str) -> Option<Seen> {
+                self.requests()
+                    .into_iter()
+                    .find(|r| r.target.starts_with(prefix))
+            }
+        }
+
+        fn serve(
+            mut stream: TcpStream,
+            routes: &[(&str, u16, &str)],
+            seen: &Arc<Mutex<Vec<Seen>>>,
+        ) {
+            // Requests here are a request line and headers, with no body, so
+            // reading to the blank line is the whole message.
+            let mut raw = Vec::new();
+            let mut byte = [0u8; 1];
+            while !raw.ends_with(b"\r\n\r\n") {
+                match stream.read(&mut byte) {
+                    Ok(0) => return,
+                    Ok(_) => raw.push(byte[0]),
+                    Err(_) => return,
+                }
+            }
+            let text = String::from_utf8_lossy(&raw).to_string();
+            let mut lines = text.lines();
+            let request_line = lines.next().unwrap_or_default().to_string();
+            let target = request_line
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or_default()
+                .to_string();
+            let headers: Vec<String> = lines.filter(|l| !l.is_empty()).map(String::from).collect();
+
+            if let Ok(mut log) = seen.lock() {
+                log.push(Seen {
+                    target: target.clone(),
+                    headers,
+                });
+            }
+
+            let (status, body) = routes
+                .iter()
+                .find(|(prefix, _, _)| target.starts_with(prefix))
+                .map(|(_, status, body)| (*status, *body))
+                .unwrap_or((
+                    404,
+                    r#"{"error":{"code":"not_found","message":"no such endpoint"}}"#,
+                ));
+            let reason = if status == 200 { "OK" } else { "Error" };
+
+            // Connection: close, so the client does not hold the socket open
+            // waiting for a second response this server will never pipeline.
+            let response = format!(
+                "HTTP/1.1 {status} {reason}\r\n\
+                 Content-Type: application/json\r\n\
+                 Content-Length: {}\r\n\
+                 Connection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+
+        const HEALTH: &str = r#"{"status":"ok","uptime_s":60,"version":"0.4.1",
+            "sensors":[{"sensor_id":"wifi-1","healthy":true}],
+            "fusion":{"configured":true,"connected":true}}"#;
+
+        /// Health only. Everything else 404s, which the poller must survive.
+        const MINIMAL: &[(&str, u16, &str)] = &[("/api/v1/health", 200, HEALTH)];
+
+        #[test]
+        fn a_local_token_goes_out_as_a_bearer_header_not_as_a_cookie() {
+            // internal/auth/localagent.go reads Authorization, and does not
+            // look in the cookie jar. Sending the right secret the wrong way
+            // is a 401 that looks exactly like a wrong secret.
+            let stub = Stub::start(MINIMAL);
+            let client = Client::new(
+                stub.base(),
+                Some(Credential::Local("machine-token".to_string())),
+            );
+            let snapshot = client.poll(5, 5, true, &Slow::default());
+            assert!(snapshot.health.is_some(), "{:?}", snapshot.error);
+
+            let seen = stub
+                .request_for("/api/v1/health")
+                .expect("health was asked for");
+            assert_eq!(seen.header("Authorization"), Some("Bearer machine-token"));
+            assert_eq!(
+                seen.header("Cookie"),
+                None,
+                "a bearer must not also be a cookie"
+            );
+        }
+
+        #[test]
+        fn a_session_token_goes_out_as_the_cookie_the_api_reads() {
+            let stub = Stub::start(MINIMAL);
+            let client = Client::new(
+                stub.base(),
+                Some(Credential::Session("human-session".to_string())),
+            );
+            let _ = client.poll(5, 5, true, &Slow::default());
+
+            let seen = stub
+                .request_for("/api/v1/health")
+                .expect("health was asked for");
+            assert_eq!(seen.header("Cookie"), Some("classg_session=human-session"));
+            assert_eq!(seen.header("Authorization"), None);
+        }
+
+        #[test]
+        fn no_credential_sends_neither_header() {
+            // The common deployment: loopback, authentication off. Sending an
+            // empty cookie would be a session token that does not exist.
+            let stub = Stub::start(MINIMAL);
+            let client = Client::new(stub.base(), None);
+            let _ = client.poll(5, 5, true, &Slow::default());
+
+            let seen = stub
+                .request_for("/api/v1/health")
+                .expect("health was asked for");
+            assert_eq!(seen.header("Authorization"), None);
+            assert_eq!(seen.header("Cookie"), None);
+        }
+
+        #[test]
+        fn the_track_query_asks_only_for_live_states_and_only_for_rows_that_fit() {
+            let stub = Stub::start(MINIMAL);
+            let client = Client::new(stub.base(), None);
+            let _ = client.poll(7, 3, false, &Slow::default());
+
+            let tracks = stub
+                .request_for("/api/v1/tracks")
+                .expect("tracks were asked for");
+            assert!(
+                tracks.target.contains("state=TENTATIVE,CONFIRMED,COASTING"),
+                "{}",
+                tracks.target
+            );
+            assert!(tracks.target.contains("limit=7"), "{}", tracks.target);
+
+            let detections = stub
+                .request_for("/api/v1/detections")
+                .expect("detections were asked for");
+            assert!(
+                detections.target.contains("limit=3"),
+                "{}",
+                detections.target
+            );
+        }
+
+        #[test]
+        fn a_row_count_outside_what_the_api_accepts_is_clamped_before_it_is_sent() {
+            // store.NormaliseLimit rejects 0 and anything over 1000, and a
+            // rejected limit costs the whole section.
+            let stub = Stub::start(MINIMAL);
+            let client = Client::new(stub.base(), None);
+            let _ = client.poll(0, 9999, false, &Slow::default());
+
+            let tracks = stub.request_for("/api/v1/tracks").expect("tracks");
+            assert!(tracks.target.contains("limit=1"), "{}", tracks.target);
+            let detections = stub.request_for("/api/v1/detections").expect("detections");
+            assert!(
+                detections.target.contains(&format!("limit={MAX_ROWS}")),
+                "{}",
+                detections.target
+            );
+        }
+
+        #[test]
+        fn the_slow_tier_is_left_alone_on_a_poll_that_is_not_due_for_it() {
+            // Nine polls in ten. Statting a filesystem and listing stored
+            // records three times a second is the cost this avoids.
+            let stub = Stub::start(MINIMAL);
+            let client = Client::new(stub.base(), None);
+            let _ = client.poll(5, 5, false, &Slow::default());
+
+            assert!(stub.request_for("/api/v1/system").is_none());
+            assert!(stub.request_for("/api/v1/captures").is_none());
+            assert!(stub.request_for("/api/v1/spectrum/sweeps").is_none());
+            assert!(stub.request_for("/api/v1/auth/me").is_none());
+            // The fast tier still went out.
+            assert!(stub.request_for("/api/v1/health").is_some());
+            assert!(stub.request_for("/api/v1/monitoring").is_some());
+        }
+
+        #[test]
+        fn a_refusal_is_read_out_of_the_envelope_not_off_the_status_line() {
+            // "log in to continue" is a sentence somebody wrote for a human.
+            // "HTTP 401" is not.
+            const DENIED: &str =
+                r#"{"error":{"code":"unauthenticated","message":"log in to continue"}}"#;
+            static ROUTES: &[(&str, u16, &str)] = &[
+                ("/api/v1/health", 200, HEALTH),
+                ("/api/v1/tracks", 401, DENIED),
+                ("/api/v1/detections", 401, DENIED),
+                ("/api/v1/monitoring", 401, DENIED),
+            ];
+            let stub = Stub::start(ROUTES);
+            let client = Client::new(stub.base(), None);
+            let snapshot = client.poll(5, 5, false, &Slow::default());
+
+            // Health is public, so the sensor verdict survives a locked door.
+            assert!(snapshot.health.is_some());
+            assert_eq!(snapshot.denied.as_deref(), Some("log in to continue"));
+            assert!(snapshot.tracks.is_none());
+            assert!(snapshot.detections.is_none());
+        }
+
+        #[test]
+        fn a_broken_endpoint_costs_its_own_section_and_nothing_else() {
+            // internal, not a refusal: the pane must not tell the operator to
+            // log in when the store is what is broken.
+            static ROUTES: &[(&str, u16, &str)] = &[
+                ("/api/v1/health", 200, HEALTH),
+                (
+                    "/api/v1/tracks",
+                    500,
+                    r#"{"error":{"code":"internal","message":"listing tracks failed"}}"#,
+                ),
+                ("/api/v1/detections", 200, r#"{"detections":[],"total":0}"#),
+            ];
+            let stub = Stub::start(ROUTES);
+            let client = Client::new(stub.base(), None);
+            let snapshot = client.poll(5, 5, false, &Slow::default());
+
+            assert!(snapshot.tracks.is_none(), "the broken section is gone");
+            assert!(snapshot.detections.is_some(), "the working one is not");
+            assert!(
+                snapshot.denied.is_none(),
+                "a 500 is not a locked door and must not be reported as one"
+            );
+        }
+
+        #[test]
+        fn a_full_poll_fills_every_section_from_the_wire() {
+            static ROUTES: &[(&str, u16, &str)] = &[
+                ("/api/v1/health", 200, HEALTH),
+                (
+                    "/api/v1/monitoring",
+                    200,
+                    r#"{"enabled":false,"discarded_while_paused":12,"reason":"testing"}"#,
+                ),
+                (
+                    "/api/v1/tracks",
+                    200,
+                    r#"{"tracks":[{"track_id":"t1","state":"CONFIRMED","confidence":0.9,
+                        "detection_count":7,"identity":{"model_hint":"Mavic 3"},
+                        "evidence":[{"class":"A","count":7}]}],"total":1}"#,
+                ),
+                (
+                    "/api/v1/detections",
+                    200,
+                    r#"{"detections":[{"ts":1786883696,"sensor_id":"wifi-1",
+                        "sensor_kind":"wifi","detection_class":"A",
+                        "rf":{"channel":6,"rssi_dbm":-52.0}}],"total":9}"#,
+                ),
+                (
+                    "/api/v1/auth/me",
+                    200,
+                    r#"{"authenticated":true,"auth_enabled":true,
+                    "user":{"username":"local-agent","role":"viewer"}}"#,
+                ),
+                (
+                    "/api/v1/system",
+                    200,
+                    r#"{"build":{"version":"0.4.1","revision":"abcdef1234"},
+                        "runtime":{"store":"libsql"},
+                        "host":{"disk_path":"/","disk_total_bytes":100,"disk_free_bytes":40}}"#,
+                ),
+                (
+                    "/api/v1/captures",
+                    200,
+                    r#"{"captures":[{"capture_id":"c1","state":"running","iface":"wlan1",
+                        "channel":6,"duration_s":60}]}"#,
+                ),
+                (
+                    "/api/v1/spectrum/sweeps",
+                    200,
+                    r#"{"sweeps":[{"sweep_id":"s1","band":"2.4GHz","state":"completed",
+                        "peak_dbfs":-41.2,"short_reads":3}]}"#,
+                ),
+            ];
+            let stub = Stub::start(ROUTES);
+            let client = Client::new(stub.base(), None);
+            let snapshot = client.poll(5, 5, true, &Slow::default());
+
+            assert!(snapshot.denied.is_none(), "nothing refused us");
+            let tracks = snapshot.tracks.as_ref().expect("tracks");
+            assert_eq!(tracks.total, 1);
+            assert_eq!(tracks.tracks[0].evidence_summary(), "Ax7");
+            assert!(tracks.tracks[0].identified());
+
+            let detections = snapshot.detections.as_ref().expect("detections");
+            assert_eq!(detections.total, 9);
+            assert_eq!(
+                detections.detections[0]
+                    .rf
+                    .as_ref()
+                    .and_then(|rf| rf.tuning()),
+                Some("ch6".to_string())
+            );
+
+            let monitoring = snapshot.monitoring.as_ref().expect("monitoring");
+            assert!(!monitoring.enabled);
+            assert_eq!(monitoring.discarded, 12);
+
+            let system = snapshot.slow.system.as_ref().expect("system");
+            assert_eq!(system.build_label(), "0.4.1+abcdef1");
+
+            let auth = snapshot.slow.auth.as_ref().expect("auth");
+            assert_eq!(
+                auth.user.as_ref().map(|u| u.username.as_str()),
+                Some("local-agent")
+            );
+
+            assert!(
+                snapshot.running_capture().is_some(),
+                "a capture holds wlan1"
+            );
+            assert_eq!(
+                snapshot.latest_sweep().and_then(|s| s.peak_dbfs),
+                Some(-41.2)
+            );
+        }
+
+        #[test]
+        fn a_body_that_is_not_the_shape_we_expect_costs_its_section_only() {
+            // An API that answered 200 with something else entirely. The
+            // section goes; the pane does not.
+            static ROUTES: &[(&str, u16, &str)] = &[
+                ("/api/v1/health", 200, HEALTH),
+                ("/api/v1/tracks", 200, "not json at all"),
+            ];
+            let stub = Stub::start(ROUTES);
+            let client = Client::new(stub.base(), None);
+            let snapshot = client.poll(5, 5, false, &Slow::default());
+
+            assert!(snapshot.health.is_some());
+            assert!(snapshot.tracks.is_none());
+            assert!(snapshot.denied.is_none(), "malformed is not refused");
+        }
+
+        #[test]
+        fn a_health_endpoint_that_is_down_takes_the_whole_poll_with_it() {
+            // /health is public, so a failure there is the service being gone
+            // rather than a permissions problem, and there is nothing else
+            // worth asking for.
+            static ROUTES: &[(&str, u16, &str)] = &[(
+                "/api/v1/health",
+                503,
+                r#"{"error":{"code":"internal","message":"starting up"}}"#,
+            )];
+            let stub = Stub::start(ROUTES);
+            let client = Client::new(stub.base(), None);
+            let snapshot = client.poll(5, 5, true, &Slow::default());
+
+            assert!(snapshot.health.is_none());
+            assert_eq!(snapshot.error.as_deref(), Some("starting up"));
+            assert!(
+                stub.request_for("/api/v1/tracks").is_none(),
+                "nothing else was asked"
+            );
+        }
+    }
+
     #[test]
     fn row_hints_are_clamped_into_the_range_the_api_accepts() {
         let hints = RowHints::default();
