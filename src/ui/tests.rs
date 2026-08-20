@@ -1325,3 +1325,122 @@ fn the_classg_pane_survives_a_radios_pane_that_wants_the_whole_column() {
         );
     }
 }
+
+/// Three filesystems as a Pi presents them: the card, the boot partition, and
+/// a stick something is recording to.
+fn with_filesystems(app: &mut App, extra: usize) {
+    use crate::panes::health::{DiskUsage, Filesystem};
+    let fs = |mount: &str, used: u64, avail: u64, total: u64| Filesystem {
+        source: format!("/dev/{mount}"),
+        mount: mount.into(),
+        usage: DiskUsage {
+            used_kb: used,
+            avail_kb: avail,
+            total_kb: total,
+        },
+    };
+    app.health.filesystems = vec![
+        fs("/", 23_800_000, 92_600_000, 122_600_000),
+        fs("/boot/firmware", 70_000, 451_000, 521_000),
+        fs("/media/captures", 512, 244_180_000, 244_180_000),
+    ];
+    for n in 0..extra {
+        app.health
+            .filesystems
+            .push(fs(&format!("/spare{n}"), 1, 99, 100));
+    }
+}
+
+#[test]
+fn a_wide_pane_puts_the_disks_beside_the_memory_rather_than_under_them() {
+    // btop's layout, and the reason for it: stacked, each filesystem would
+    // cost the process table a row to say what a spare column says for free.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    let rows = render(&mut app, 200, 24);
+
+    let mem = rows
+        .iter()
+        .find(|r| r.contains("mem "))
+        .expect("a memory row");
+    assert!(
+        mem.contains("disks"),
+        "the heading shares the memory row: {mem}"
+    );
+
+    // Every mount is named by its last component and carries what can
+    // actually be written to it.
+    let joined = rows.join(
+        "
+",
+    );
+    assert!(joined.contains("firmware"), "{joined}");
+    assert!(joined.contains("captures"), "{joined}");
+    assert!(joined.contains("440M free of 509M"), "{joined}");
+    // The boot partition is not the card, and both are listed.
+    assert!(joined.contains("88.3G free of 116.9G"), "{joined}");
+}
+
+#[test]
+fn a_narrow_pane_drops_the_disks_rather_than_truncating_them() {
+    // Half of a narrow pane cannot hold a label, a meter and two figures, and
+    // a disk row arriving cut in half is worse than one that is absent.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    let rows = render(&mut app, 90, 24);
+    let joined = rows.join(
+        "
+",
+    );
+
+    assert!(!joined.contains("firmware"), "{joined}");
+    // Memory keeps the whole width and still reports.
+    assert!(rows.iter().any(|r| r.contains("mem ")), "{joined}");
+}
+
+#[test]
+fn more_filesystems_than_fit_are_counted_rather_than_dropped_silently() {
+    // A box listing three of six disks without mentioning the other three is
+    // a box that has quietly stopped answering the question.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 3);
+    assert!(render(&mut app, 200, 24)
+        .join(
+            "
+"
+        )
+        .contains("+3 more"));
+}
+
+#[test]
+fn the_second_column_is_placed_by_characters_not_by_bytes() {
+    // The memory meters beside it are three-byte block glyphs. Padding by
+    // byte count would put the disks column two thirds of the way off the
+    // right edge of the pane.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    // The threshold is the System pane's own width, and the right-hand column
+    // takes about sixty of the terminal's before this pane sees any -- so
+    // these are terminal widths that leave the pane enough, not 104 itself.
+    for width in [170u16, 200, 240] {
+        let rows = render(&mut app, width, 24);
+        assert!(
+            rows.iter().any(|r| r.contains("disks")),
+            "the disks column fell off the pane at {width}"
+        );
+    }
+    // Nothing may spill past the frame the pane drew for itself, at any width
+    // either side of the threshold.
+    for width in [80u16, 104, 140, 170, 200, 240] {
+        for row in render(&mut app, width, 24) {
+            assert!(
+                row.chars().count() <= width as usize,
+                "a row overran {width}: {row}"
+            );
+        }
+    }
+}

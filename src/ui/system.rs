@@ -21,7 +21,7 @@ use ratatui::{
 use super::gauge::{self, Glyphs, Ramp};
 use super::{field, header_style, pane_block, push_if_fits, threshold_color, DIM, GUTTER};
 use crate::app::App;
-use crate::format::{human_kb, uptime};
+use crate::format::{clip, human_kb, uptime};
 
 /// The aggregate CPU and memory meters size themselves to the pane, within
 /// these bounds. Below the minimum a meter is too coarse to read a trend off;
@@ -29,6 +29,100 @@ use crate::format::{human_kb, uptime};
 /// the label they belong to.
 const METER_MIN: usize = 12;
 const METER_MAX: usize = 24;
+
+/// Below this the disks column is dropped and memory keeps the whole width.
+/// Two half-width columns that can each hold a meter and a figure need this
+/// much between them; under it the disk rows arrive truncated, which is worse
+/// than absent.
+const MEM_AND_DISKS_COLS: usize = 104;
+
+/// Filesystems the disks column will list before it stops.
+///
+/// A Pi has two that matter -- the card and the boot partition -- and a third
+/// when something is recording to a stick. Past that this is a process table
+/// with a disk list on top of it.
+const DISK_ROWS: usize = 3;
+
+/// Lays a second column of cells beside the first, starting at column `at`.
+///
+/// Takes whichever column is longer and pads the short one, so a machine with
+/// one filesystem and a machine with three both produce a rectangle.
+fn beside<'a>(left: Vec<Line<'a>>, right: Vec<Vec<Span<'a>>>, at: usize) -> Vec<Line<'a>> {
+    let rows = left.len().max(right.len());
+    let mut out = Vec::with_capacity(rows);
+    for row in 0..rows {
+        let mut spans = left
+            .get(row)
+            .map(|line| line.spans.clone())
+            .unwrap_or_default();
+        let Some(cell) = right.get(row) else {
+            out.push(Line::from(spans));
+            continue;
+        };
+        // Measured in characters, not bytes: the meters are three-byte block
+        // glyphs and a byte count would pad them off the edge of the pane.
+        let filled: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+        if at > filled {
+            spans.push(Span::raw(" ".repeat(at - filled)));
+        }
+        spans.extend(cell.iter().cloned());
+        out.push(Line::from(spans));
+    }
+    out
+}
+
+/// The disks column: a heading, then a row per filesystem.
+///
+/// Free rather than used, for the same reason the health pane leads with it —
+/// "20% used" and "88.4G free" answer different questions and the second is
+/// the one you act on. The figure is df's Available, so it is what can
+/// actually be written rather than what is left over on paper.
+fn disk_column<'a>(
+    filesystems: &[crate::panes::health::Filesystem],
+    glyphs: gauge::Glyphs,
+    width: usize,
+) -> Vec<Vec<Span<'a>>> {
+    let meter = (width / 5).clamp(6, 12);
+    // Left-aligned with the mount labels under it, not with the meters. A
+    // heading indented past the column it names reads as another row.
+    let mut rows: Vec<Vec<Span>> = vec![vec![Span::styled("disks", header_style())]];
+
+    for fs in filesystems.iter().take(DISK_ROWS) {
+        let pct = fs.usage.pct();
+        let mut spans = vec![Span::styled(
+            format!("{:<DISK_NAME_W$}", clip(fs.label(), DISK_NAME_W - 1)),
+            Style::default().fg(DIM),
+        )];
+        spans.extend(gauge::bar(pct / 100.0, meter, glyphs, Ramp::Load));
+        spans.push(Span::styled(
+            format!(" {pct:>3.0}%"),
+            Style::default().fg(threshold_color(pct, 80.0, 92.0)),
+        ));
+        spans.push(Span::raw(format!(
+            "  {} free of {}",
+            human_kb(fs.usage.avail_kb),
+            human_kb(fs.usage.total_kb)
+        )));
+        rows.push(spans);
+    }
+
+    // Said rather than silently dropped: a box that lists three of five disks
+    // and does not mention the other two is a box you would trust.
+    if filesystems.len() > DISK_ROWS {
+        rows.push(vec![Span::styled(
+            format!(
+                "{:<DISK_NAME_W$}+{} more",
+                "",
+                filesystems.len() - DISK_ROWS
+            ),
+            Style::default().fg(DIM),
+        )]);
+    }
+    rows
+}
+
+/// Mount-label column. Wide enough for `firmware`.
+const DISK_NAME_W: usize = 10;
 
 /// The COMMAND LINE heading, or nothing when that column was dropped.
 fn cmdline_heading(cmdline_w: usize) -> &'static str {
@@ -222,7 +316,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
         width,
         format!("  {}/{}", human_kb(mem.used_kb()), human_kb(mem.total_kb)),
     );
-    lines.push(field("mem", mem_spans));
+    let mem_line = field("mem", mem_spans);
 
     // Buffers and page cache get their own meter rather than being folded into
     // the used figure. On a Pi running the ClassG stack in Docker this is
@@ -255,7 +349,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
             format!("  {cache_size}"),
         );
     }
-    lines.push(field("cache", cache_spans));
+    let cache_line = field("cache", cache_spans);
 
     let swap = if mem.swap_total_kb == 0 {
         Span::styled("off", Style::default().fg(DIM))
@@ -286,7 +380,21 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
             format!("   {} tasks", system.task_count),
         );
     }
-    lines.push(field("swap", swap_spans));
+    let swap_line = field("swap", swap_spans);
+
+    // btop puts memory and disks side by side, and on a pane this wide the
+    // room is there. Stacking them would push the process table down by a row
+    // per filesystem to say something four columns could have said.
+    let memory = vec![mem_line, cache_line, swap_line];
+    if width >= MEM_AND_DISKS_COLS && !app.health.filesystems.is_empty() {
+        lines.extend(beside(
+            memory,
+            disk_column(&app.health.filesystems, glyphs, width / 2),
+            width / 2,
+        ));
+    } else {
+        lines.extend(memory);
+    }
 
     // ── process table ──
     lines.push(Line::default());

@@ -187,12 +187,74 @@ impl DiskUsage {
     }
 }
 
-/// Parses the last line of `df -P -k /`. POSIX output mode matters: without
-/// `-P`, a long device name wraps onto its own line and the fields land in
-/// different columns.
-pub(crate) fn parse_df(text: &str) -> Option<DiskUsage> {
-    let line = text.lines().last()?;
-    let fields: Vec<&str> = line.split_whitespace().collect();
+/// One mounted filesystem, as `df` reports it.
+///
+/// The dashboard used to ask `df` about `/` alone, which is the filesystem the
+/// Pi boots from and not necessarily the one anything is written to. A unit
+/// recording captures to a stick, or with the ClassG store on its own
+/// partition, fills something this pane could not see.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Filesystem {
+    /// The device, as df names it. `/dev/mmcblk0p2`, `/dev/sda1`.
+    pub(crate) source: String,
+    /// Where it is mounted. This is the label worth showing: nobody thinks of
+    /// the boot partition as mmcblk0p1, they think of it as /boot/firmware.
+    pub(crate) mount: String,
+    pub(crate) usage: DiskUsage,
+}
+
+impl Filesystem {
+    /// The short name for the mount point, for a column that cannot hold a
+    /// path. `/` stays `/`; everything else is its last component.
+    pub(crate) fn label(&self) -> &str {
+        if self.mount == "/" {
+            return "/";
+        }
+        self.mount
+            .rsplit('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&self.mount)
+    }
+}
+
+/// Every real filesystem `df -P -k` reports, in the order it reports them.
+///
+/// Only sources under `/dev/`. A stock Pi mounts a dozen tmpfs, devtmpfs and
+/// cgroup filesystems whose "capacity" is a kernel accounting detail rather
+/// than somewhere a capture can land, and listing them buries the two that
+/// matter. Docker's overlay mounts go the same way: the space they consume is
+/// already counted against the disk underneath them, so showing both would
+/// double-count the only number anyone reads this box for.
+///
+/// Deduplicated by source, because a bind mount presents one device twice and
+/// two rows with identical figures read as two disks.
+pub(crate) fn parse_df_all(text: &str) -> Vec<Filesystem> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for line in text.lines().skip(1) {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let (Some(source), Some(mount)) = (fields.first(), fields.get(5)) else {
+            continue;
+        };
+        if !source.starts_with("/dev/") || seen.iter().any(|s| s == source) {
+            continue;
+        }
+        let Some(usage) = parse_df_fields(&fields) else {
+            continue;
+        };
+        seen.push((*source).to_string());
+        out.push(Filesystem {
+            source: (*source).to_string(),
+            mount: (*mount).to_string(),
+            usage,
+        });
+    }
+    out
+}
+
+/// The three size columns out of one already-split df row.
+fn parse_df_fields(fields: &[&str]) -> Option<DiskUsage> {
     Some(DiskUsage {
         total_kb: fields.get(1)?.parse().ok()?,
         used_kb: fields.get(2)?.parse().ok()?,
@@ -273,6 +335,10 @@ pub(crate) struct HealthPane {
     /// exactly the machines that could not tell.
     pub(crate) throttle: Option<Throttle>,
     pub(crate) disk: Option<DiskUsage>,
+    /// Every real filesystem, for the disks box. Kept here because this pane
+    /// already owns the `df` fork and running a second one to tell the System
+    /// pane the same thing would be a fork per tick for nothing.
+    pub(crate) filesystems: Vec<Filesystem>,
     pub(crate) io: IoRates,
 }
 
@@ -305,10 +371,18 @@ impl HealthPane {
             .and_then(parse_throttled)
             .map(Throttle::decode);
 
+        // One `df` for every filesystem rather than one for `/`. Same fork,
+        // same cadence, strictly more answer -- and the root row is just the
+        // one mounted at `/`.
         if self.sample_count.is_multiple_of(5) || self.disk.is_none() {
-            self.disk = command_output("df", &["-P", "-k", "/"])
-                .as_deref()
-                .and_then(parse_df);
+            if let Some(text) = command_output("df", &["-P", "-k"]) {
+                self.filesystems = parse_df_all(&text);
+                self.disk = self
+                    .filesystems
+                    .iter()
+                    .find(|fs| fs.mount == "/")
+                    .map(|fs| fs.usage);
+            }
         }
 
         if let Some(text) = read_trimmed("/proc/diskstats") {
@@ -454,13 +528,28 @@ mod tests {
         assert_eq!(parse_thermal_millidegrees(""), None);
     }
 
-    #[test]
-    fn df_reads_the_posix_columns() {
-        let text = "\
+    /// A Pi as df actually describes one: the card, the boot partition, a
+    /// stick, and the pile of pseudo-filesystems that are not places a
+    /// capture can land.
+    const DF: &str = "\
 Filesystem     1024-blocks     Used Available Capacity Mounted on
 /dev/mmcblk0p2    59872256 21456320  35367424      38% /
+devtmpfs            1804000        0   1804000       0% /dev
+tmpfs               1963892        0   1963892       0% /dev/shm
+tmpfs                785560     1284    784276       1% /run
+/dev/mmcblk0p1       522230    62918    459312      13% /boot/firmware
+overlay            59872256 21456320  35367424      38% /var/lib/docker/overlay2/abc/merged
+/dev/sda1         244180988      512 244180476       1% /media/captures
+tmpfs                392776        0    392776       0% /run/user/1000
 ";
-        let disk = parse_df(text).expect("parsed");
+
+    #[test]
+    fn df_reads_the_posix_columns() {
+        let disk = parse_df_all(DF)
+            .into_iter()
+            .find(|fs| fs.mount == "/")
+            .expect("a root filesystem")
+            .usage;
         assert_eq!(disk.total_kb, 59_872_256);
         assert_eq!(disk.used_kb, 21_456_320);
         // Available, not total - used. Those differ by 2.9G here -- the 5%
@@ -475,10 +564,45 @@ Filesystem     1024-blocks     Used Available Capacity Mounted on
     #[test]
     fn a_disk_df_could_not_measure_is_zero_percent_rather_than_a_divide() {
         assert_eq!(DiskUsage::default().pct(), 0.0);
-        // Truncated output -- a df that printed no Available column must
-        // yield None rather than a plausible-looking figure built from the
-        // columns that did arrive.
-        assert!(parse_df("Filesystem 1024-blocks Used\n/dev/root 100 40\n").is_none());
+        // A df row with no Available column is dropped rather than yielding
+        // a plausible figure built from the columns that did arrive.
+        assert!(parse_df_all("Filesystem 1024-blocks Used\n/dev/root 100 40\n").is_empty());
+        assert!(parse_df_all("").is_empty());
+    }
+
+    #[test]
+    fn only_filesystems_a_capture_could_land_on_are_listed() {
+        let mounts: Vec<String> = parse_df_all(DF).into_iter().map(|fs| fs.mount).collect();
+        assert_eq!(mounts, vec!["/", "/boot/firmware", "/media/captures"]);
+
+        // tmpfs and devtmpfs report a "capacity" that is a kernel accounting
+        // detail, and a stock Pi mounts a dozen of them -- enough to bury the
+        // two rows anybody reads this box for.
+        assert!(!mounts.iter().any(|m| m.starts_with("/run")));
+        assert!(!mounts.iter().any(|m| m == "/dev/shm"));
+        // Docker's overlay is the root filesystem counted a second time.
+        assert!(!mounts.iter().any(|m| m.contains("overlay")));
+    }
+
+    #[test]
+    fn a_mount_point_is_labelled_by_its_last_component() {
+        // The column cannot hold a path, and nobody thinks of the boot
+        // partition as mmcblk0p1.
+        let found = parse_df_all(DF);
+        let labels: Vec<&str> = found.iter().map(Filesystem::label).collect();
+        assert_eq!(labels, vec!["/", "firmware", "captures"]);
+    }
+
+    #[test]
+    fn one_device_mounted_twice_is_one_row() {
+        // A bind mount presents the same device again, and two rows carrying
+        // identical figures read as two disks half as full as the one there is.
+        let text = "\
+Filesystem     1024-blocks     Used Available Capacity Mounted on
+/dev/sda1        100 40  60      40% /media/captures
+/dev/sda1        100 40  60      40% /var/lib/classg
+";
+        assert_eq!(parse_df_all(text).len(), 1);
     }
 
     /// The disk figures against the `df` on this machine.
@@ -495,8 +619,12 @@ Filesystem     1024-blocks     Used Available Capacity Mounted on
     #[cfg(target_os = "linux")]
     #[test]
     fn the_disk_figures_agree_with_the_df_on_this_machine() {
-        let text = command_output("df", &["-P", "-k", "/"]).expect("df runs on Linux");
-        let disk = parse_df(&text).expect("df output parses");
+        let text = command_output("df", &["-P", "-k"]).expect("df runs on Linux");
+        let disk = parse_df_all(&text)
+            .into_iter()
+            .find(|fs| fs.mount == "/")
+            .expect("every Linux box has a root filesystem")
+            .usage;
 
         assert!(disk.total_kb > 0, "a filesystem with no size: {text}");
         assert!(disk.used_kb > 0, "a root filesystem in use: {text}");
