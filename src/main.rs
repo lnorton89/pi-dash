@@ -112,7 +112,9 @@ fn main() -> Result<std::process::ExitCode> {
     .context("failed to load configuration")?;
 
     if cli.print_config {
-        print_config(&config);
+        let mut stdout = io::stdout().lock();
+        print_config(&config, &mut stdout)?;
+        stdout.flush()?;
         return Ok(std::process::ExitCode::SUCCESS);
     }
 
@@ -146,8 +148,9 @@ fn main() -> Result<std::process::ExitCode> {
 /// help somebody whose dashboard is talking to the wrong box; "(environment)"
 /// next to it points straight at the `CLASSG_API` still exported in their
 /// shell, which no amount of reading the config file would have revealed.
-fn print_config(config: &Config) {
-    println!(
+fn print_config(config: &Config, out: &mut impl Write) -> Result<()> {
+    writeln!(
+        out,
         "{:<12}{}",
         "config",
         config
@@ -155,26 +158,31 @@ fn print_config(config: &Config) {
             .as_ref()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "none found".to_string())
-    );
+    )?;
 
     // The key the origin map is keyed by is not always the label worth
     // printing: `api_interval` is a field name, `api poll` is what it does.
-    let row = |label: &str, key: &str, value: String| {
-        println!("{label:<12}{value:<40}({})", config.origins.of(key).label());
+    let mut row = |label: &str, key: &str, value: String| -> Result<()> {
+        writeln!(
+            out,
+            "{label:<12}{value:<40}({})",
+            config.origins.of(key).label()
+        )?;
+        Ok(())
     };
-    row("api", "api", config.api.clone());
+    row("api", "api", config.api.clone())?;
     row(
         "interval",
         "interval",
         format!("{:.2}s", config.interval.as_secs_f64()),
-    );
+    )?;
     row(
         "api poll",
         "api_interval",
         format!("{:.2}s", config.api_interval.as_secs_f64()),
-    );
-    row("theme", "theme", config.theme.clone());
-    row("glyphs", "glyphs", config.glyphs.clone());
+    )?;
+    row("theme", "theme", config.theme.clone())?;
+    row("glyphs", "glyphs", config.glyphs.clone())?;
     row(
         "processes",
         "processes",
@@ -182,7 +190,7 @@ fn print_config(config: &Config) {
             .processes
             .map(|n| n.to_string())
             .unwrap_or_else(|| "fill the pane".to_string()),
-    );
+    )?;
     // Never the token itself. This is the one command somebody pastes into an
     // issue when the dashboard will not talk to their API, and a session
     // cookie in that paste is a live credential for the whole unit.
@@ -197,17 +205,18 @@ fn print_config(config: &Config) {
             (None, Some(_)) => "set (local agent token on this unit)".to_string(),
             (None, None) => "not set".to_string(),
         },
-    );
+    )?;
     row(
         "usb ids",
         "usb_vendor_ids",
         config.usb_vendor_ids.join(", "),
-    );
+    )?;
     row(
         "ignore",
         "ignore_interfaces",
         config.ignore_interfaces.join(", "),
-    );
+    )?;
+    Ok(())
 }
 
 fn enter_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
@@ -242,4 +251,91 @@ fn install_panic_hook() {
         let _ = execute!(io::stdout(), LeaveAlternateScreen);
         previous(info);
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::Origin;
+
+    fn rendered(config: &Config) -> String {
+        let mut buffer: Vec<u8> = Vec::new();
+        print_config(config, &mut buffer).expect("print_config must not fail");
+        String::from_utf8(buffer).expect("utf-8")
+    }
+
+    #[test]
+    fn print_config_never_prints_the_credential_itself() {
+        // This is the one command somebody pastes into an issue when the
+        // dashboard will not talk to their API. A session cookie in that paste
+        // is a live credential for the whole unit, and a local-agent token is
+        // one for as long as the API stays up.
+        let config = Config {
+            session: Some("s3cr3t-session-cookie".to_string()),
+            local_token: Some("s3cr3t-machine-token".to_string()),
+            ..Config::default()
+        };
+        let text = rendered(&config);
+
+        assert!(
+            !text.contains("s3cr3t"),
+            "a credential reached stdout:\n{text}"
+        );
+        assert!(text.contains("credential"), "{text}");
+        assert!(text.contains("set (session cookie)"), "{text}");
+    }
+
+    #[test]
+    fn print_config_says_which_credential_is_in_play() {
+        // A session outranks a local token, so the row has to name the one
+        // actually being sent rather than the one that happens to exist.
+        let local_only = Config {
+            local_token: Some("machine".to_string()),
+            ..Config::default()
+        };
+        assert!(rendered(&local_only).contains("local agent token"));
+
+        let both = Config {
+            session: Some("human".to_string()),
+            local_token: Some("machine".to_string()),
+            ..Config::default()
+        };
+        assert!(rendered(&both).contains("session cookie"));
+        assert!(!rendered(&both).contains("local agent token"));
+
+        assert!(rendered(&Config::default()).contains("not set"));
+    }
+
+    #[test]
+    fn print_config_names_the_tier_that_set_each_value() {
+        // The entire point of the column: a dashboard pointed at the wrong box
+        // is nearly always a CLASSG_API still exported in the shell, and no
+        // amount of reading the config file reveals that.
+        let mut config = Config {
+            api: "http://pi.local:9000".to_string(),
+            ..Config::default()
+        };
+        config.origins.set_for_test("api", Origin::Env);
+        let text = rendered(&config);
+
+        let api_row = text
+            .lines()
+            .find(|line| line.starts_with("api "))
+            .expect("an api row");
+        assert!(api_row.contains("http://pi.local:9000"), "{api_row}");
+        assert!(api_row.ends_with("(environment)"), "{api_row}");
+
+        // Untouched values still say where they came from.
+        let theme_row = text
+            .lines()
+            .find(|line| line.starts_with("theme"))
+            .expect("a theme row");
+        assert!(theme_row.ends_with("(built-in default)"), "{theme_row}");
+    }
+
+    #[test]
+    fn print_config_reports_no_file_rather_than_an_empty_path() {
+        let text = rendered(&Config::default());
+        assert!(text.starts_with("config      none found"), "{text}");
+    }
 }

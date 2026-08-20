@@ -125,6 +125,15 @@ impl Origins {
     pub(crate) fn of(&self, key: &str) -> Origin {
         self.0.get(key).copied().unwrap_or(Origin::Default)
     }
+
+    /// Stamps an origin without going through a load. `set` stays private so
+    /// that provenance can only be claimed by the code that actually applied
+    /// the value; this exists for tests that need a resolved config without a
+    /// file or an environment to resolve it from.
+    #[cfg(test)]
+    pub(crate) fn set_for_test(&mut self, key: &'static str, origin: Origin) {
+        self.set(key, origin);
+    }
 }
 
 /// The resolved configuration the rest of the program reads.

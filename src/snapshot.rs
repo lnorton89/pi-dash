@@ -448,6 +448,326 @@ mod tests {
         assert!(text.contains("make dev"));
     }
 
+    use crate::panes::classg::{
+        Adsb, AuthState, Capture, CapturePage, CredentialKind, Detection, DetectionPage, Evidence,
+        FusionHealth, HealthResponse, Identity, MonitoringState, Rf, SensorHealth, Slow,
+        SpectrumSweep, SweepPage, SystemBuild, SystemHost, SystemInfo, SystemRuntime, Track,
+        TrackPage,
+    };
+
+    /// Renders just the ClassG section, which is the half of `--once` that is
+    /// not simply a transcription of a struct.
+    fn classg(snapshot: &Snapshot) -> String {
+        let mut buffer: Vec<u8> = Vec::new();
+        print_classg(snapshot, &mut buffer).expect("rendering must not fail");
+        String::from_utf8(buffer).expect("utf-8")
+    }
+
+    fn working() -> Snapshot {
+        Snapshot {
+            health: Some(HealthResponse {
+                status: "ok".to_string(),
+                uptime_s: 8040,
+                version: "0.4.1".to_string(),
+                sensors: vec![SensorHealth {
+                    sensor_id: "wifi-1".to_string(),
+                    sensor_kind: "wifi".to_string(),
+                    healthy: true,
+                    seconds_since_heartbeat: Some(2),
+                    detections_5m: 1284,
+                    ..SensorHealth::default()
+                }],
+                fusion: Some(FusionHealth {
+                    configured: true,
+                    connected: true,
+                    ..FusionHealth::default()
+                }),
+            }),
+            monitoring: Some(MonitoringState {
+                enabled: true,
+                ..MonitoringState::default()
+            }),
+            ..Snapshot::default()
+        }
+    }
+
+    #[test]
+    fn an_api_that_is_not_up_says_where_it_looked_and_how_to_start_it() {
+        let text = classg(&Snapshot {
+            error: Some("Connection refused (os error 111)".to_string()),
+            ..Snapshot::default()
+        });
+        assert!(text.contains("not reachable"), "{text}");
+        assert!(text.contains("Connection refused"), "{text}");
+        assert!(text.contains("make dev"), "{text}");
+        // Nothing else is invented for a unit that never answered.
+        assert!(!text.contains("sensor"), "{text}");
+    }
+
+    #[test]
+    fn a_paused_recording_is_stated_before_anything_it_explains() {
+        // Every sensor healthy, fusion connected, nothing tracked -- which is
+        // line for line what a quiet sky looks like.
+        let mut snapshot = working();
+        snapshot.monitoring = Some(MonitoringState {
+            enabled: false,
+            reason: Some("known local flight".to_string()),
+            discarded: 1204,
+            ..MonitoringState::default()
+        });
+        snapshot.tracks = Some(TrackPage::default());
+        let text = classg(&snapshot);
+
+        assert!(text.contains("PAUSED"), "{text}");
+        assert!(text.contains("1204 discarded"), "{text}");
+        assert!(text.contains("known local flight"), "{text}");
+
+        let record = text.find("PAUSED").expect("a record line");
+        let tracks = text.find("tracks").expect("a tracks line");
+        assert!(record < tracks, "the pause must precede what it explains");
+    }
+
+    #[test]
+    fn the_build_from_system_beats_the_bare_version_from_health() {
+        // A revision is what answers "is this the binary I deployed"; /health
+        // knows only a version string.
+        let mut snapshot = working();
+        snapshot.slow.system = Some(SystemInfo {
+            build: SystemBuild {
+                version: "0.4.1".to_string(),
+                revision: Some("a1b2c3d4e5f6".to_string()),
+                revision_dirty: true,
+            },
+            runtime: SystemRuntime {
+                store: "libsql".to_string(),
+                ..SystemRuntime::default()
+            },
+            host: SystemHost {
+                disk_path: "/var/lib/classg".to_string(),
+                disk_total_bytes: Some(31_000_000_000),
+                disk_free_bytes: Some(2_100_000_000),
+            },
+        });
+        let text = classg(&snapshot);
+        assert!(text.contains("0.4.1+a1b2c3d-dirty"), "{text}");
+        assert!(text.contains("libsql"), "{text}");
+        assert!(text.contains("/var/lib/classg"), "{text}");
+        assert!(text.contains("free of"), "{text}");
+
+        // Without /system the version still appears rather than a blank.
+        let mut bare = working();
+        bare.slow = Slow::default();
+        assert!(classg(&bare).contains("0.4.1"));
+    }
+
+    #[test]
+    fn a_disk_the_api_could_not_measure_says_so_rather_than_showing_zero() {
+        let mut snapshot = working();
+        snapshot.slow.system = Some(SystemInfo {
+            host: SystemHost {
+                disk_path: "/".to_string(),
+                disk_total_bytes: None,
+                disk_free_bytes: None,
+            },
+            ..SystemInfo::default()
+        });
+        let text = classg(&snapshot);
+        assert!(text.contains("unavailable"), "{text}");
+        assert!(!text.contains("0 free of 0"), "{text}");
+    }
+
+    #[test]
+    fn a_refusal_names_the_remedy_for_the_credential_that_was_actually_sent() {
+        // One sentence for all three cases was wrong in two of them.
+        let cases = [
+            (Some(CredentialKind::Local), "rewrites it on restart"),
+            (Some(CredentialKind::Session), "CLASSG_SESSION has expired"),
+            (None, ".agent-state"),
+        ];
+        for (credential, expected) in cases {
+            let mut snapshot = working();
+            snapshot.credential = credential;
+            snapshot.denied = Some("log in to continue".to_string());
+            snapshot.slow.auth = Some(AuthState {
+                auth_enabled: true,
+                authenticated: false,
+                ..AuthState::default()
+            });
+            let text = classg(&snapshot);
+            assert!(text.contains("log in to continue"), "{text}");
+            assert!(text.contains(expected), "for {credential:?}:\n{text}");
+        }
+    }
+
+    #[test]
+    fn a_sensor_that_was_never_fitted_reads_differently_from_one_that_broke() {
+        let mut snapshot = working();
+        if let Some(api) = snapshot.health.as_mut() {
+            api.sensors.push(SensorHealth {
+                sensor_id: "sdr-1".to_string(),
+                healthy: false,
+                reason: Some("rtl_sdr: device not found".to_string()),
+                ..SensorHealth::default()
+            });
+            api.sensors.push(SensorHealth {
+                sensor_id: "ble-1".to_string(),
+                healthy: false,
+                optional: true,
+                reason: Some("not fitted".to_string()),
+                ..SensorHealth::default()
+            });
+        }
+        let text = classg(&snapshot);
+        assert!(text.contains("DOWN"), "{text}");
+        assert!(text.contains("rtl_sdr: device not found"), "{text}");
+        // Lower case, and not DOWN: a build you chose is not a fault.
+        let ble = text
+            .lines()
+            .find(|l| l.contains("ble-1"))
+            .expect("the optional sensor is still listed");
+        assert!(ble.contains("off"), "{ble}");
+        assert!(!ble.contains("DOWN"), "{ble}");
+    }
+
+    #[test]
+    fn a_radio_held_by_a_capture_or_a_sweep_is_reported() {
+        let mut snapshot = working();
+        snapshot.slow.captures = Some(CapturePage {
+            captures: vec![Capture {
+                state: "running".to_string(),
+                iface: "wlan1".to_string(),
+                channel: 6,
+                duration_s: 60,
+                ..Capture::default()
+            }],
+        });
+        snapshot.slow.sweeps = Some(SweepPage {
+            sweeps: vec![SpectrumSweep {
+                band: "2.4GHz".to_string(),
+                state: "running".to_string(),
+                ..SpectrumSweep::default()
+            }],
+        });
+        let text = classg(&snapshot);
+        assert!(text.contains("wlan1 ch6"), "{text}");
+        assert!(text.contains("radio busy"), "{text}");
+    }
+
+    #[test]
+    fn a_failed_capture_says_why_rather_than_only_that_it_did() {
+        let mut snapshot = working();
+        snapshot.slow.captures = Some(CapturePage {
+            captures: vec![Capture {
+                state: "failed".to_string(),
+                error: Some("tcpdump: wlan1: No such device".to_string()),
+                ..Capture::default()
+            }],
+        });
+        assert!(classg(&snapshot).contains("No such device"));
+    }
+
+    #[test]
+    fn a_track_nothing_identified_is_marked_as_such() {
+        let mut snapshot = working();
+        snapshot.tracks = Some(TrackPage {
+            tracks: vec![Track {
+                state: "TENTATIVE".to_string(),
+                confidence: 0.10,
+                detection_count: 140,
+                identity: Some(Identity {
+                    vendor: Some("DJI".to_string()),
+                    ..Identity::default()
+                }),
+                evidence: vec![Evidence {
+                    class: "C".to_string(),
+                    count: 140,
+                }],
+                ..Track::default()
+            }],
+            total: 1,
+        });
+        let text = classg(&snapshot);
+        assert!(text.contains("(not identified)"), "{text}");
+        assert!(text.contains("140x"), "{text}");
+    }
+
+    #[test]
+    fn detections_are_named_folded_and_tuned_the_way_the_pane_shows_them() {
+        let mut snapshot = working();
+        let mut detections: Vec<Detection> = (0..4)
+            .map(|_| Detection {
+                sensor_kind: "sdr".to_string(),
+                sensor_id: "sdr-0".to_string(),
+                detection_class: "D".to_string(),
+                rf: Some(Rf {
+                    freq_hz: Some(1_090_000_000),
+                    ..Rf::default()
+                }),
+                adsb: Some(Adsb {
+                    icao: "a9d770".to_string(),
+                    callsign: Some("N172SP".to_string()),
+                }),
+                ..Detection::default()
+            })
+            .collect();
+        detections.push(Detection {
+            sensor_kind: "wifi".to_string(),
+            detection_class: "A".to_string(),
+            rf: Some(Rf {
+                channel: Some(149),
+                rssi_dbm: Some(-52.0),
+                ..Rf::default()
+            }),
+            ..Detection::default()
+        });
+        snapshot.detections = Some(DetectionPage {
+            detections,
+            total: 15370,
+        });
+        let text = classg(&snapshot);
+
+        // The class is named, not lettered -- with the letter kept, because
+        // this view has the room the pane does not.
+        assert!(text.contains("A Remote ID"), "{text}");
+        assert!(text.contains("D ADS-B"), "{text}");
+        // Megahertz, not a rounded gigahertz that loses the band.
+        assert!(text.contains("1090M"), "{text}");
+        assert!(text.contains("ch149"), "{text}");
+        // Folded exactly as the pane folds, so the two cannot disagree.
+        assert!(text.contains("N172SP x4"), "{text}");
+        // And the true total survives the folding.
+        assert!(text.contains("15370 total"), "{text}");
+    }
+
+    #[test]
+    fn a_class_this_build_has_never_heard_of_still_shows_its_letter() {
+        let mut snapshot = working();
+        snapshot.detections = Some(DetectionPage {
+            detections: vec![Detection {
+                sensor_kind: "sdr".to_string(),
+                detection_class: "Z".to_string(),
+                ..Detection::default()
+            }],
+            total: 1,
+        });
+        let text = classg(&snapshot);
+        // What the API actually said. A label this binary is too old to know
+        // is not a reason to print nothing.
+        assert!(text.contains(" Z "), "{text}");
+    }
+
+    #[test]
+    fn a_section_the_api_would_not_serve_says_unavailable_not_empty() {
+        // tracks: None is "we could not ask", which is a different fact from
+        // "nothing is flying" and must not render as the same line.
+        let mut snapshot = working();
+        snapshot.tracks = None;
+        snapshot.detections = None;
+        let text = classg(&snapshot);
+        assert!(text.contains("tracks   unavailable"), "{text}");
+        assert!(text.contains("detects  unavailable"), "{text}");
+    }
+
     #[test]
     fn throttle_description_distinguishes_unknown_from_clean() {
         assert_eq!(describe_throttle(None), "unknown - no vcgencmd here");
