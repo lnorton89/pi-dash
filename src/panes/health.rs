@@ -481,6 +481,62 @@ Filesystem     1024-blocks     Used Available Capacity Mounted on
         assert!(parse_df("Filesystem 1024-blocks Used\n/dev/root 100 40\n").is_none());
     }
 
+    /// The disk figures against the `df` on this machine.
+    ///
+    /// Everything else about parse_df is checked with a fixture, and a fixture
+    /// only proves the parser agrees with whoever typed it. This is the column
+    /// indices checked against a real df, which is what the fixture was wrong
+    /// about for the whole life of the file: it read total and used and left
+    /// Available on the floor, and the pane reported the 5% ext4 holds back
+    /// for root as free space.
+    ///
+    /// Linux only. `df` on other platforms prints different columns, and there
+    /// is nothing to learn from asserting that.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_disk_figures_agree_with_the_df_on_this_machine() {
+        let text = command_output("df", &["-P", "-k", "/"]).expect("df runs on Linux");
+        let disk = parse_df(&text).expect("df output parses");
+
+        assert!(disk.total_kb > 0, "a filesystem with no size: {text}");
+        assert!(disk.used_kb > 0, "a root filesystem in use: {text}");
+        assert!(disk.avail_kb > 0, "no room at all: {text}");
+
+        // Available is what a normal user can write, so it can never exceed
+        // what is left over once used is taken off -- the reserve sits between
+        // the two. Equal is legitimate on a filesystem with no reserve.
+        let unused = disk.total_kb - disk.used_kb;
+        assert!(
+            disk.avail_kb <= unused,
+            "available {} exceeds total-minus-used {unused}, so a column is misread: {text}",
+            disk.avail_kb
+        );
+        assert!(
+            disk.used_kb + disk.avail_kb <= disk.total_kb,
+            "used plus available overruns the filesystem: {text}"
+        );
+
+        let pct = disk.pct();
+        assert!((0.0..=100.0).contains(&pct), "{pct}% full: {text}");
+    }
+
+    /// The thermal zone, if this kernel exposes one. CI runners do not, and a
+    /// Pi always does -- so this asserts the shape of whatever came back
+    /// rather than that something came back.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_thermal_zone_that_exists_reads_as_a_plausible_temperature() {
+        let Some(text) = read_trimmed("/sys/class/thermal/thermal_zone0/temp") else {
+            return; // no thermal zone here; the pane says so and carries on
+        };
+        let Some(celsius) = parse_thermal_millidegrees(&text) else {
+            return; // a zone that reads 0 is a zone that is not wired up
+        };
+        assert!(
+            (-40.0..=125.0).contains(&celsius),
+            "{celsius} C is not a temperature a silicon die reports"
+        );
+    }
     #[test]
     fn diskstats_counts_whole_disks_only() {
         // Real shape: 14 fields for a Bookworm kernel, name in field 3,

@@ -916,6 +916,124 @@ SwapFree:         512000 kB
         assert_eq!(stat.rss_pages, 99);
     }
 
+    /// The whole process walk, against the /proc on this machine.
+    ///
+    /// Every other test here feeds the parsers text that was typed by hand.
+    /// This one runs them over a real kernel, which is the only way to find
+    /// out that a field moved, that the walk skips something it should not, or
+    /// that this process cannot see itself.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_process_walk_finds_this_very_process_on_a_real_proc() {
+        let stats = read_process_stats();
+        assert!(!stats.is_empty(), "/proc yielded no processes at all");
+
+        // pid 1 exists on every Linux box, container or not.
+        assert!(
+            stats.iter().any(|s| s.pid == 1),
+            "the walk missed pid 1, so it is skipping entries"
+        );
+
+        let me = std::process::id() as i32;
+        let mine = stats
+            .iter()
+            .find(|s| s.pid == me)
+            .expect("the test binary must appear in its own process table");
+
+        // The name the kernel reports is the executable, truncated to 15
+        // characters -- which is why the pane has a comm column and a command
+        // line column and does not try to make one do both jobs.
+        assert!(
+            !mine.comm.is_empty(),
+            "a process with no comm at all: {mine:?}"
+        );
+        assert!(
+            mine.start_ticks > 0,
+            "start_ticks is the field the command-line cache is keyed on; \
+             zero here means the offset is wrong: {mine:?}"
+        );
+        assert!(
+            mine.rss_pages > 0,
+            "a running process holding no resident pages: {mine:?}"
+        );
+        // 'R' or 'S' for a test binary; anything is fine except nothing.
+        assert!(mine.state.is_ascii_alphabetic(), "state {:?}", mine.state);
+    }
+
+    /// The command line of this process, read the way the pane reads it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn this_process_can_read_its_own_command_line() {
+        let me = std::process::id() as i32;
+        let cmdline = read_cmdline(me).expect("a test binary has an argv");
+
+        // The separators are gone, which is the entire job of parse_cmdline
+        // and the thing that looked correct for months because a terminal
+        // renders a NUL as a blank cell.
+        assert!(
+            !cmdline.contains('\0'),
+            "a NUL survived into the pane's text: {cmdline:?}"
+        );
+        assert!(
+            !cmdline.starts_with(' ') && !cmdline.ends_with(' '),
+            "{cmdline:?}"
+        );
+        // argv[0] is the binary, whatever cargo called it.
+        assert!(
+            cmdline.contains("pi_dash") || cmdline.contains("pi-dash"),
+            "argv[0] does not name this binary: {cmdline:?}"
+        );
+    }
+
+    /// Kernel threads really do have an empty cmdline, which is how the pane
+    /// tells them apart from userspace and brackets their names.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_real_kernel_thread_reports_no_command_line() {
+        let stats = read_process_stats();
+        // kthreadd is pid 2 on a normal kernel and absent in some containers,
+        // so this proves the rule where it can and stays quiet where it cannot.
+        if stats.iter().any(|s| s.pid == 2) {
+            assert!(
+                read_cmdline(2).is_none(),
+                "pid 2 is kthreadd and has no argv; a non-empty answer means \
+                 the empty-cmdline case is being papered over"
+            );
+        }
+    }
+
+    /// The kernel's own page size, which every memory figure is scaled by.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_page_size_comes_from_the_auxiliary_vector_not_a_guess() {
+        // Reads /proc/self/auxv for real. A wrong answer here reports every
+        // process's memory 4x or 16x out, silently.
+        let size = page_size();
+        assert!(size.is_power_of_two(), "{size}");
+        assert!((1024..=1024 * 1024).contains(&size), "{size}");
+    }
+
+    /// /proc/meminfo and /proc/stat, parsed from the real files.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_memory_and_cpu_files_parse_on_this_kernel() {
+        let text = read_trimmed("/proc/meminfo").expect("/proc/meminfo");
+        let mem = parse_meminfo(&text);
+        assert!(mem.total_kb > 0, "no total memory: {text}");
+        assert!(
+            mem.available_kb <= mem.total_kb,
+            "more memory available than exists"
+        );
+        assert!(
+            mem.swap_free_kb <= mem.swap_total_kb,
+            "more swap free than exists"
+        );
+
+        let text = read_trimmed("/proc/stat").expect("/proc/stat");
+        let (aggregate, cores) = parse_stat(&text);
+        assert!(aggregate.is_some(), "no aggregate cpu line: {text}");
+        assert!(!cores.is_empty(), "a machine with no cores: {text}");
+    }
     #[test]
     fn a_kernel_thread_has_no_command_line_rather_than_a_bogus_one() {
         // Nothing on a dev machine has this pid; the point is that an

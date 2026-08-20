@@ -83,13 +83,28 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
                 system.task_count
             )?;
             for proc in system.procs.iter().take(5) {
+                // The command line, not just the comm. The kernel truncates
+                // comm to fifteen characters, so `classg-sensor-` and
+                // `classg-sensor-s` are the same string and the argv is the
+                // only thing that says which sensor it is. The pane shows both
+                // columns; this showed neither.
+                //
+                // A kernel thread has no argv at all, and its bracketed comm
+                // is what says so — the same convention the pane uses, because
+                // `[kworker/1:2-events]` reading differently in the two views
+                // would be two facts where there is one.
+                let command = if proc.cmdline.is_empty() {
+                    format!("[{}]", proc.name)
+                } else {
+                    proc.cmdline.clone()
+                };
                 writeln!(
                     out,
                     "  {:>7}  {:>6.1}%  {:>7}  {}",
                     proc.pid,
                     proc.cpu_pct,
                     human_kb(proc.rss_kb),
-                    proc.name
+                    command
                 )?;
             }
         }
