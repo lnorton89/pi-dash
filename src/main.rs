@@ -41,6 +41,7 @@
 mod app;
 mod config;
 mod format;
+mod localtoken;
 mod panes;
 mod run;
 mod snapshot;
@@ -168,9 +169,10 @@ fn print_config(config: &Config) {
     row(
         "session",
         "session",
-        match &config.session {
-            Some(_) => "set".to_string(),
-            None => "not set".to_string(),
+        match (&config.session, &config.local_token) {
+            (Some(_), _) => "set (session cookie)".to_string(),
+            (None, Some(_)) => "set (local agent token on this unit)".to_string(),
+            (None, None) => "not set".to_string(),
         },
     );
     row(

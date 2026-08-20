@@ -97,6 +97,8 @@ pub(crate) enum Origin {
     File,
     Env,
     Cli,
+    /// Read off this unit's own disk, with nobody having configured anything.
+    LocalAgent,
 }
 
 impl Origin {
@@ -106,6 +108,7 @@ impl Origin {
             Origin::File => "config file",
             Origin::Env => "environment",
             Origin::Cli => "command line",
+            Origin::LocalAgent => "local agent token on this unit",
         }
     }
 }
@@ -148,6 +151,18 @@ pub(crate) struct Config {
     /// credential that could make a new session. Copy the cookie from a
     /// browser that is already signed in, or mint one with `classgctl`.
     pub(crate) session: Option<String>,
+    /// The API's local-agent token, found on this host.
+    ///
+    /// Distinct from `session` on purpose: a session names a person and can do
+    /// whatever that person can, while this names the machine and is viewer
+    /// only. Nobody configures it -- the API writes it into the state
+    /// directory it already shares with the host agents, mode 0640, and being
+    /// able to read that file is the credential.
+    ///
+    /// `session` wins when both exist. Someone who exported CLASSG_SESSION
+    /// meant it, and the usual reason is pointing this build at a different
+    /// unit over the network, where a local file describes the wrong box.
+    pub(crate) local_token: Option<String>,
     pub(crate) usb_vendor_ids: Vec<String>,
     pub(crate) ignore_interfaces: Vec<String>,
     /// Where the settings came from, for `--print-config` and the help pane.
@@ -166,6 +181,7 @@ impl Default for Config {
             glyphs: "unicode".to_string(),
             processes: None,
             session: None,
+            local_token: None,
             usb_vendor_ids: DEFAULT_USB_VENDOR_IDS
                 .iter()
                 .map(|s| s.to_string())
@@ -243,6 +259,16 @@ pub(crate) fn load_config(override_path: Option<PathBuf>, cli: &CliOverrides) ->
         .session
         .map(|token| token.trim().to_string())
         .filter(|token| !token.is_empty());
+
+    // Only when no session was configured. Looking for the file regardless
+    // would mean a `CLASSG_SESSION=... pidash` aimed at another unit silently
+    // preferring this one's credential the day someone reordered these two.
+    if config.session.is_none() {
+        config.local_token = crate::localtoken::discover();
+        if config.local_token.is_some() {
+            config.origins.set("session", Origin::LocalAgent);
+        }
+    }
     Ok(config)
 }
 

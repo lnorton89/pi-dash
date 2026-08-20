@@ -201,9 +201,11 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
         // the thing somebody screenshots when asking why a pane is empty.
         Line::from(format!(
             "  session   {}",
-            match app.config.session {
-                Some(_) => "set — sent as the classg_session cookie",
-                None => "none — only /health and /auth/me are public",
+            match (&app.config.session, &app.config.local_token) {
+                (Some(_), _) => "set — sent as the classg_session cookie",
+                (None, Some(_)) =>
+                    "this unit's own local agent token — sent as Authorization: Bearer",
+                (None, None) => "none — only /health and /auth/me are public",
             }
         )),
         Line::default(),

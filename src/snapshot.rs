@@ -13,7 +13,7 @@ use anyhow::Result;
 
 use crate::config::Config;
 use crate::format::{human_bytes, human_kb, human_rate, human_rate_compact, short_age, uptime};
-use crate::panes::classg::{detection_class_label, Client, Slow, Snapshot};
+use crate::panes::classg::{detection_class_label, Client, Credential, Slow, Snapshot};
 use crate::panes::health::{HealthPane, Tense, Throttle};
 use crate::panes::radios::{RadiosPane, WirelessMode};
 use crate::panes::system::SystemPane;
@@ -167,7 +167,10 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
     writeln!(out, "classg  {}", config.api)?;
     // A one-shot has no previous slow tier to carry forward and no second
     // chance to fetch one, so it always asks for the whole picture.
-    let client = Client::new(config.api.clone(), config.session.clone());
+    let client = Client::new(
+        config.api.clone(),
+        Credential::pick(config.session.clone(), config.local_token.clone()),
+    );
     print_classg(&client.poll(5, 5, true, &Slow::default()), out)?;
     Ok(())
 }

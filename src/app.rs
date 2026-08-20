@@ -5,7 +5,7 @@ use std::time::Instant;
 use ratatui::style::Color;
 
 use crate::config::Config;
-use crate::panes::classg::ClassgPane;
+use crate::panes::classg::{ClassgPane, Credential};
 use crate::panes::health::HealthPane;
 use crate::panes::radios::RadiosPane;
 use crate::panes::system::SystemPane;
@@ -73,7 +73,7 @@ impl App {
     pub(crate) fn new(config: Config) -> Self {
         let classg = ClassgPane::spawn(
             config.api.clone(),
-            config.session.clone(),
+            Credential::pick(config.session.clone(), config.local_token.clone()),
             config.api_interval,
         );
         App {

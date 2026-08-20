@@ -824,11 +824,41 @@ impl RowHints {
 pub(crate) struct Client {
     agent: ureq::Agent,
     base: String,
-    session: Option<String>,
+    credential: Option<Credential>,
+}
+
+/// How this process proves who it is to the API.
+///
+/// One enum rather than two Options, because the precedence between them is a
+/// decision and not an accident: a session is a person's, a local token is this
+/// machine's, and only one of them is ever sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Credential {
+    /// A session cookie copied from a browser, or set in the config file. Can
+    /// do whatever the person it belongs to can.
+    Session(String),
+    /// The local-agent token the API wrote into this unit's state directory.
+    /// Viewer only, and nobody had to paste anything.
+    Local(String),
+}
+
+impl Credential {
+    /// Picks the credential to use, discarding blanks.
+    ///
+    /// An empty string in a config file means "not set", not "send an empty
+    /// cookie" -- which the API would read as a session token that does not
+    /// exist and answer 401 to, on every poll, for ever.
+    pub(crate) fn pick(session: Option<String>, local: Option<String>) -> Option<Credential> {
+        let clean = |v: Option<String>| v.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+        if let Some(token) = clean(session) {
+            return Some(Credential::Session(token));
+        }
+        clean(local).map(Credential::Local)
+    }
 }
 
 impl Client {
-    pub(crate) fn new(base: String, session: Option<String>) -> Self {
+    pub(crate) fn new(base: String, credential: Option<Credential>) -> Self {
         let agent = ureq::AgentBuilder::new()
             .timeout_connect(CONNECT_TIMEOUT)
             .timeout_read(READ_TIMEOUT)
@@ -837,10 +867,7 @@ impl Client {
         Client {
             agent,
             base,
-            // An empty string in a config file means "not set", not "send an
-            // empty cookie" — which the API would read as a session token that
-            // does not exist and answer 401 to.
-            session: session.filter(|token| !token.trim().is_empty()),
+            credential,
         }
     }
 
@@ -856,8 +883,16 @@ impl Client {
         }
         let url = format!("{}{}", self.base.trim_end_matches('/'), path);
         let mut request = self.agent.get(&url);
-        if let Some(token) = &self.session {
-            request = request.set("Cookie", &format!("{SESSION_COOKIE}={token}"));
+        match &self.credential {
+            Some(Credential::Session(token)) => {
+                request = request.set("Cookie", &format!("{SESSION_COOKIE}={token}"));
+            }
+            // Bearer, not a cookie: this is not a session and the API does not
+            // look for it in the cookie jar. See internal/auth/localagent.go.
+            Some(Credential::Local(token)) => {
+                request = request.set("Authorization", &format!("Bearer {token}"));
+            }
+            None => {}
         }
 
         let response = match request.call() {
@@ -992,7 +1027,7 @@ impl std::fmt::Debug for ClassgPane {
 impl ClassgPane {
     /// Spawns the poller. Returns immediately; the first snapshot arrives on
     /// the channel a moment later, and until then the pane says "connecting".
-    pub(crate) fn spawn(base: String, session: Option<String>, interval: Duration) -> Self {
+    pub(crate) fn spawn(base: String, credential: Option<Credential>, interval: Duration) -> Self {
         let (tx, rx) = channel();
         let hints = Arc::new(RowHints::default());
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -1001,7 +1036,7 @@ impl ClassgPane {
         let worker_hints = Arc::clone(&hints);
         let worker_shutdown = Arc::clone(&shutdown);
         std::thread::spawn(move || {
-            let client = Client::new(worker_base, session);
+            let client = Client::new(worker_base, credential);
             poll_loop(&client, interval, &tx, &worker_hints, &worker_shutdown);
         });
 
@@ -1400,10 +1435,33 @@ mod tests {
         // An empty value in a config file means "not set". Sent as a cookie it
         // would be a session token that does not exist, and the API would
         // answer 401 to a poller that never had credentials to begin with.
-        let client = Client::new("http://127.0.0.1:1".to_string(), Some("   ".to_string()));
-        assert!(client.session.is_none());
-        let real = Client::new("http://127.0.0.1:1".to_string(), Some("abc123".to_string()));
-        assert_eq!(real.session.as_deref(), Some("abc123"));
+        assert_eq!(Credential::pick(Some("   ".to_string()), None), None);
+        assert_eq!(Credential::pick(Some(String::new()), None), None);
+        assert_eq!(
+            Credential::pick(Some("abc123".to_string()), None),
+            Some(Credential::Session("abc123".to_string()))
+        );
+    }
+
+    #[test]
+    fn a_session_beats_the_local_token() {
+        // Someone who exported CLASSG_SESSION meant it, and the usual reason
+        // is pointing this build at a DIFFERENT unit -- where the token lying
+        // on this disk describes the wrong box entirely.
+        assert_eq!(
+            Credential::pick(Some("human".to_string()), Some("machine".to_string())),
+            Some(Credential::Session("human".to_string()))
+        );
+        // A blank session is not a session, so the local token still wins.
+        assert_eq!(
+            Credential::pick(Some("  ".to_string()), Some("machine".to_string())),
+            Some(Credential::Local("machine".to_string()))
+        );
+        assert_eq!(
+            Credential::pick(None, Some("machine".to_string())),
+            Some(Credential::Local("machine".to_string()))
+        );
+        assert_eq!(Credential::pick(None, None), None);
     }
 
     #[test]

@@ -232,8 +232,32 @@ File-only settings worth knowing about: `theme` (accent colour), `processes`
 ### If the API has authentication switched on
 
 Only `/health` and `/auth/me` are public. Everything else — tracks, detections,
-the recording switch, the build string — needs a viewer session, and without one
-the pane shows sensor state, says the API refused it, and points at this:
+the recording switch, the build string — needs a viewer session.
+
+**On the unit itself this is automatic and needs no configuration.** The API
+writes a local-agent token into the state directory it already shares with the
+host-side deploy and watchdog agents, mode `0640`, and pi-dash finds it and
+sends it as `Authorization: Bearer`. Being able to read that file is the
+credential: a process running as the account that owns the deployment is the
+operator, and the kernel is what says so. It grants **viewer** and nothing more,
+so this can read the sky and cannot restart a radio or stop a recording.
+
+Look-up order, first hit wins:
+
+| | Where |
+|---|---|
+| `CLASSG_LOCAL_TOKEN` | an explicit path to the file |
+| `CLASSG_DEPLOY_STATE` | the agents' own variable, `<dir>/local-api-token` |
+| beside the checkout | `<repo>/.agent-state/local-api-token`, found by walking up from this binary |
+| `~/.local/state/classg/local-api-token` | the agents' default outside a checkout |
+
+`pi-dash --print-config` says which credential is in play, never its value.
+
+### Watching a different unit
+
+A token on this disk describes *this* box, so it is no use pointed at another
+one. `CLASSG_SESSION` still exists for that and takes precedence over anything
+found locally:
 
 ```sh
 CLASSG_SESSION=<value of the classg_session cookie> pi-dash
@@ -244,8 +268,8 @@ could mint a session; copy the cookie from a browser that is already signed in.
 It can also go in the config file as `session`, but the environment is the
 better place for a live credential.
 
-Most units have authentication off and need none of this, which is why a pane
-with no session still draws — degraded, and saying so.
+A unit with authentication off needs none of this, and a pane with no
+credential at all still draws — degraded, and saying so.
 
 See [`pi-dash.toml`](pi-dash.toml) for the file form. It is searched next to
 the binary, in the working directory, then `~/.config/pi-dash/pi-dash.toml`;
