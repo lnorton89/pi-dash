@@ -75,12 +75,12 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
             )?;
             writeln!(
                 out,
-                "  load     {:.2} {:.2} {:.2}   up {}   {} tasks",
+                "  load     {:.2} {:.2} {:.2}   up {}   {} threads",
                 system.load[0],
                 system.load[1],
                 system.load[2],
                 uptime(system.uptime_secs),
-                system.task_count
+                system.thread_count
             )?;
             for proc in system.procs.iter().take(5) {
                 // The command line, not just the comm. The kernel truncates

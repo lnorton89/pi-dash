@@ -116,7 +116,7 @@ fn with_load(app: &mut App) {
     };
     app.system.load = [15.67, 5.21, 2.24];
     app.system.uptime_secs = 26_700;
-    app.system.task_count = 431;
+    app.system.thread_count = 431;
     app.system.runnable = 4;
     // A ramp, so the graph has a shape rather than a flat line.
     app.system.cpu_history = (0..200).map(|i| (i % 100) as f64 / 99.0).collect();
@@ -174,8 +174,8 @@ fn the_system_pane_draws_gradient_meters_and_a_history_graph() {
         "cache meter missing:\n{screen}"
     );
     assert!(
-        contains(&rows, "431 tasks, 4 running"),
-        "task counts missing"
+        contains(&rows, "431 threads, 4 running"),
+        "thread counts missing"
     );
     assert!(
         contains(&rows, "up 0d7h25m"),
@@ -264,7 +264,7 @@ fn no_system_pane_label_is_ever_sliced_by_the_pane_edge() {
             }
             if let Some(swap) = cell(&row, "  swap ") {
                 assert!(
-                    !swap.contains("task") || swap.contains(" tasks"),
+                    !swap.contains("thread") || swap.contains(" threads"),
                     "sliced at width {width}: {row}"
                 );
                 assert!(

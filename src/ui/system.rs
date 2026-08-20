@@ -553,15 +553,15 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
         &mut used,
         width,
         format!(
-            "   {} tasks, {} running",
-            system.task_count, system.runnable
+            "   {} threads, {} running",
+            system.thread_count, system.runnable
         ),
     ) {
         push_if_fits(
             &mut swap_spans,
             &mut used,
             width,
-            format!("   {} tasks", system.task_count),
+            format!("   {} threads", system.thread_count),
         );
     }
     let swap_line = field("swap", swap_spans);

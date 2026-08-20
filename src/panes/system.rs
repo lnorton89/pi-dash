@@ -174,7 +174,13 @@ pub(crate) fn parse_meminfo(text: &str) -> MemInfo {
     mem
 }
 
-/// `(load1, load5, load15, runnable, total_tasks)` from `/proc/loadavg`.
+/// `(load1, load5, load15, runnable, threads)` from `/proc/loadavg`.
+///
+/// The fourth field counts kernel scheduling entities, which is threads rather
+/// than processes -- a Pi showing 370 of them is running about 200 programs.
+/// Worth being precise about now that the process table reports its own count
+/// beside this one: two numbers on the same screen that disagree by 170 need
+/// to say why.
 pub(crate) fn parse_loadavg(text: &str) -> Option<([f64; 3], u64, u64)> {
     let fields: Vec<&str> = text.split_whitespace().collect();
     let load = [
@@ -420,7 +426,8 @@ pub(crate) struct SystemPane {
     pub(crate) mem: MemInfo,
     pub(crate) load: [f64; 3],
     pub(crate) runnable: u64,
-    pub(crate) task_count: u64,
+    /// Threads, not processes. See [`parse_loadavg`].
+    pub(crate) thread_count: u64,
     pub(crate) uptime_secs: u64,
     pub(crate) procs: Vec<ProcRow>,
     /// Set when `/proc` is not readable at all, i.e. this is not Linux.
@@ -449,7 +456,7 @@ impl Default for SystemPane {
             mem: MemInfo::default(),
             load: [0.0; 3],
             runnable: 0,
-            task_count: 0,
+            thread_count: 0,
             uptime_secs: 0,
             procs: Vec::new(),
             unavailable: None,
@@ -510,7 +517,7 @@ impl SystemPane {
         {
             self.load = load;
             self.runnable = runnable;
-            self.task_count = total;
+            self.thread_count = total;
         }
         if let Some(secs) = read_trimmed("/proc/uptime")
             .as_deref()
