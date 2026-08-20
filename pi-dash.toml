@@ -3,9 +3,13 @@
 # Every key is optional; anything left out keeps its built-in default, so a
 # three-line file that only moves the API port is a valid config.
 #
-# Precedence is env > this file > defaults. CLASSG_API and CLASSG_DASH_INTERVAL
-# both win over what is written here, which keeps the habit from the Bash
-# dashboard working:  CLASSG_API=http://pi:9000 pi-dash
+# Precedence is env > this file > defaults. CLASSG_API, CLASSG_SESSION and
+# CLASSG_DASH_INTERVAL all win over what is written here, which keeps the habit
+# from the Bash dashboard working:  CLASSG_API=http://pi:9000 pi-dash
+#
+# `pi-dash --print-config` prints every resolved value with the tier that set
+# it, which is the fastest way to find the CLASSG_API still exported in a shell
+# somewhere.
 #
 # Searched, in order: next to the binary, the working directory, then
 # ~/.config/pi-dash/pi-dash.toml. Pass --config to name one explicitly.
@@ -24,7 +28,31 @@ interval_secs = 2.0
 
 # Seconds between ClassG API polls. Separate from interval_secs because it is
 # the only sample that leaves the process, and it runs on its own thread.
+#
+# Four endpoints are polled at this rate — /health, /monitoring, /tracks and
+# /detections. The four that change slowly (/system, /auth/me, /captures and
+# /spectrum/sweeps) are refreshed every tenth poll instead, because statting a
+# filesystem and listing stored records three times a second is a cost this box
+# does not need to pay to tell you the same answer.
 api_interval_secs = 3.0
+
+# Session cookie for a ClassG API with authentication switched on.
+#
+# Only /health and /auth/me are public. Without a session everything else
+# answers 401, and the pane shows sensor state, says the API refused it, and
+# tells you to set this — rather than drawing an empty track list, which is
+# indistinguishable from a quiet sky.
+#
+# This is the value of the `classg_session` cookie, not a password: pi-dash
+# never logs in and cannot mint a session of its own. Copy it from a browser
+# that is already signed in.
+#
+# Prefer the CLASSG_SESSION environment variable. This is a live credential for
+# the whole unit, and a file sitting next to the binary is a worse place for one
+# than a shell export. Left unset, or empty, means no session — which is the
+# right answer for the common case, where the API is on loopback with
+# authentication off.
+# session = ""
 
 # Accent colour for borders and the title chip. Any standard terminal colour
 # name; an unrecognised one falls back to cyan rather than failing to start.

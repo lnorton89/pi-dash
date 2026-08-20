@@ -10,9 +10,9 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::PathBuf;
 
-pub const DEFAULT_API: &str = "http://127.0.0.1:8081";
-pub const DEFAULT_INTERVAL_SECS: f64 = 2.0;
-pub const DEFAULT_API_INTERVAL_SECS: f64 = 3.0;
+pub(crate) const DEFAULT_API: &str = "http://127.0.0.1:8081";
+pub(crate) const DEFAULT_INTERVAL_SECS: f64 = 2.0;
+pub(crate) const DEFAULT_API_INTERVAL_SECS: f64 = 3.0;
 
 /// Vendor IDs worth calling a radio: MediaTek, Realtek (which is also where
 /// the RTL-SDR lands), Ralink, TP-Link, Atheros, Great Scott.
@@ -21,80 +21,139 @@ pub const DEFAULT_API_INTERVAL_SECS: f64 = 3.0;
 /// and `0bda:2838` (RTL-SDR Blog V4). Note that `0bda` is Realtek's whole
 /// catalogue, so a Realtek card reader would match too — false positives here
 /// are harmless, a missing adapter is not.
-pub const DEFAULT_USB_VENDOR_IDS: [&str; 6] = ["0e8d", "0bda", "148f", "2357", "0cf3", "1d50"];
+pub(crate) const DEFAULT_USB_VENDOR_IDS: [&str; 6] =
+    ["0e8d", "0bda", "148f", "2357", "0cf3", "1d50"];
 
 /// Interfaces the radios pane never shows. Container and virtual-bridge
 /// plumbing is not a radio, and on a Pi running the ClassG stack in Docker
 /// there is a lot of it.
-pub const DEFAULT_IGNORE_INTERFACES: [&str; 6] =
+pub(crate) const DEFAULT_IGNORE_INTERFACES: [&str; 6] =
     ["lo", "docker*", "br-*", "veth*", "virbr*", "tailscale*"];
 
 /// The readers are built around a ~46-column body. Wider than about 60 and the
 /// right-hand column is mostly padding, which on a large monitor means a third
 /// of the screen showing nothing — so the split is a clamp, not a percentage,
 /// and the system pane gets every column the readers cannot use.
-pub const READER_MIN_COLS: u16 = 48;
-pub const READER_MAX_COLS: u16 = 60;
+pub(crate) const READER_MIN_COLS: u16 = 48;
+pub(crate) const READER_MAX_COLS: u16 = 60;
 
 /// Below this the two-column layout leaves both halves unreadable. The Bash
 /// version put btop in its own tmux window at this point; here the dashboard
 /// switches to showing one pane at a time.
-pub const NARROW_COLS: u16 = 100;
+pub(crate) const NARROW_COLS: u16 = 100;
 
 /// The file form. Every field is optional so a partial file is valid — you
 /// should be able to drop in three lines to move the API port without
 /// restating defaults you do not care about.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ConfigFile {
+pub(crate) struct ConfigFile {
     #[serde(default)]
-    pub dash: DashSection,
+    pub(crate) dash: DashSection,
     #[serde(default)]
-    pub radios: RadiosSection,
+    pub(crate) radios: RadiosSection,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DashSection {
+pub(crate) struct DashSection {
     /// Base URL of the ClassG API, without a trailing `/api/v1`.
-    pub api: Option<String>,
+    pub(crate) api: Option<String>,
     /// Seconds between local (`/proc`, `/sys`, `vcgencmd`) samples.
-    pub interval_secs: Option<f64>,
+    pub(crate) interval_secs: Option<f64>,
     /// Seconds between ClassG API polls. Separate from `interval_secs`
     /// because it is the only sample that leaves the process.
-    pub api_interval_secs: Option<f64>,
+    pub(crate) api_interval_secs: Option<f64>,
     /// Accent colour: any standard terminal colour name. Default `cyan`.
-    pub theme: Option<String>,
+    pub(crate) theme: Option<String>,
     /// `unicode` (default) or `ascii`. See [`crate::ui::gauge::Glyphs`].
-    pub glyphs: Option<String>,
+    pub(crate) glyphs: Option<String>,
     /// Rows of process table in the system pane. Default: fill the pane.
-    pub processes: Option<usize>,
+    pub(crate) processes: Option<usize>,
+    /// Value of the ClassG `classg_session` cookie, for a unit that has
+    /// authentication switched on. See [`Config::session`].
+    pub(crate) session: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RadiosSection {
+pub(crate) struct RadiosSection {
     /// Four-hex-digit USB vendor IDs treated as radios.
-    pub usb_vendor_ids: Option<Vec<String>>,
+    pub(crate) usb_vendor_ids: Option<Vec<String>>,
     /// Interface names to hide. A trailing `*` globs a prefix.
-    pub ignore_interfaces: Option<Vec<String>>,
+    pub(crate) ignore_interfaces: Option<Vec<String>>,
+}
+
+/// Which tier of the precedence chain a resolved value actually came from.
+///
+/// `--print-config` has always promised to print "where each part came from"
+/// and has only ever printed the file it found. That is the least useful half:
+/// the question people have is why the dashboard is talking to the wrong port,
+/// and the answer is nearly always a `CLASSG_API` still exported in the shell
+/// they ran it from, which the config file cannot tell them about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Default,
+    File,
+    Env,
+    Cli,
+}
+
+impl Origin {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Origin::Default => "built-in default",
+            Origin::File => "config file",
+            Origin::Env => "environment",
+            Origin::Cli => "command line",
+        }
+    }
+}
+
+/// Where each key was last written from. Anything never written is a default.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Origins(std::collections::BTreeMap<&'static str, Origin>);
+
+impl Origins {
+    fn set(&mut self, key: &'static str, origin: Origin) {
+        self.0.insert(key, origin);
+    }
+
+    pub(crate) fn of(&self, key: &str) -> Origin {
+        self.0.get(key).copied().unwrap_or(Origin::Default)
+    }
 }
 
 /// The resolved configuration the rest of the program reads.
 #[derive(Debug, Clone)]
-pub struct Config {
-    pub api: String,
-    pub interval: std::time::Duration,
-    pub api_interval: std::time::Duration,
-    pub theme: String,
+pub(crate) struct Config {
+    pub(crate) api: String,
+    pub(crate) interval: std::time::Duration,
+    pub(crate) api_interval: std::time::Duration,
+    pub(crate) theme: String,
     /// Character set for meters, graphs and borders. Parsed into
     /// [`crate::ui::gauge::Glyphs`] once, at startup.
-    pub glyphs: String,
-    pub processes: Option<usize>,
-    pub usb_vendor_ids: Vec<String>,
-    pub ignore_interfaces: Vec<String>,
+    pub(crate) glyphs: String,
+    pub(crate) processes: Option<usize>,
+    /// Session cookie for the ClassG API, or `None` for a unit with
+    /// authentication off — which is the common case, since the API is on
+    /// loopback and the dashboard runs on the same box.
+    ///
+    /// Only `/health` and `/auth/me` are public. Without a session every other
+    /// endpoint answers 401 and the pane can show sensor state and nothing
+    /// else, so it reports that in as many words rather than drawing an empty
+    /// track list that looks like a quiet sky.
+    ///
+    /// A token, not a password: pi-dash never logs in and never holds a
+    /// credential that could make a new session. Copy the cookie from a
+    /// browser that is already signed in, or mint one with `classgctl`.
+    pub(crate) session: Option<String>,
+    pub(crate) usb_vendor_ids: Vec<String>,
+    pub(crate) ignore_interfaces: Vec<String>,
     /// Where the settings came from, for `--print-config` and the help pane.
-    pub source: Option<PathBuf>,
+    pub(crate) source: Option<PathBuf>,
+    /// Per-key provenance, for `--print-config`.
+    pub(crate) origins: Origins,
 }
 
 impl Default for Config {
@@ -106,6 +165,7 @@ impl Default for Config {
             theme: "cyan".to_string(),
             glyphs: "unicode".to_string(),
             processes: None,
+            session: None,
             usb_vendor_ids: DEFAULT_USB_VENDOR_IDS
                 .iter()
                 .map(|s| s.to_string())
@@ -115,6 +175,7 @@ impl Default for Config {
                 .map(|s| s.to_string())
                 .collect(),
             source: None,
+            origins: Origins::default(),
         }
     }
 }
@@ -133,12 +194,12 @@ fn secs_to_duration(secs: f64) -> std::time::Duration {
 
 /// Overrides supplied on the command line, applied last of all.
 #[derive(Debug, Default)]
-pub struct CliOverrides {
-    pub api: Option<String>,
-    pub interval: Option<f64>,
+pub(crate) struct CliOverrides {
+    pub(crate) api: Option<String>,
+    pub(crate) interval: Option<f64>,
 }
 
-pub fn load_config(override_path: Option<PathBuf>, cli: &CliOverrides) -> Result<Config> {
+pub(crate) fn load_config(override_path: Option<PathBuf>, cli: &CliOverrides) -> Result<Config> {
     let explicit = override_path.is_some();
     let path = match override_path {
         Some(p) => Some(p),
@@ -169,48 +230,68 @@ pub fn load_config(override_path: Option<PathBuf>, cli: &CliOverrides) -> Result
 
     if let Some(api) = &cli.api {
         config.api = api.clone();
+        config.origins.set("api", Origin::Cli);
     }
     if let Some(secs) = cli.interval {
         config.interval = secs_to_duration(secs);
+        config.origins.set("interval", Origin::Cli);
     }
 
     config.api = config.api.trim_end_matches('/').to_string();
+    // An empty token in a file is "not set", not "send an empty cookie".
+    config.session = config
+        .session
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty());
     Ok(config)
 }
 
 fn apply_file(config: &mut Config, file: ConfigFile) {
     if let Some(api) = file.dash.api {
         config.api = api;
+        config.origins.set("api", Origin::File);
     }
     if let Some(secs) = file.dash.interval_secs {
         config.interval = secs_to_duration(secs);
+        config.origins.set("interval", Origin::File);
     }
     if let Some(secs) = file.dash.api_interval_secs {
         config.api_interval = secs_to_duration(secs);
+        config.origins.set("api_interval", Origin::File);
     }
     if let Some(theme) = file.dash.theme {
         config.theme = theme;
+        config.origins.set("theme", Origin::File);
     }
     if let Some(glyphs) = file.dash.glyphs {
         config.glyphs = glyphs;
+        config.origins.set("glyphs", Origin::File);
     }
     if let Some(n) = file.dash.processes {
         config.processes = Some(n);
+        config.origins.set("processes", Origin::File);
+    }
+    if let Some(session) = file.dash.session {
+        config.session = Some(session);
+        config.origins.set("session", Origin::File);
     }
     if let Some(ids) = file.radios.usb_vendor_ids {
         config.usb_vendor_ids = ids;
+        config.origins.set("usb_vendor_ids", Origin::File);
     }
     if let Some(ifaces) = file.radios.ignore_interfaces {
         config.ignore_interfaces = ifaces;
+        config.origins.set("ignore_interfaces", Origin::File);
     }
 }
 
 /// The two environment variables the Bash dashboard honoured, unchanged, so a
-/// `CLASSG_API=... pidash` habit keeps working.
+/// `CLASSG_API=... pidash` habit keeps working, plus `CLASSG_SESSION`.
 fn apply_env(config: &mut Config) {
     if let Ok(api) = std::env::var("CLASSG_API") {
         if !api.trim().is_empty() {
             config.api = api.trim().to_string();
+            config.origins.set("api", Origin::Env);
         }
     }
     if let Ok(raw) = std::env::var("CLASSG_DASH_INTERVAL") {
@@ -219,6 +300,16 @@ fn apply_env(config: &mut Config) {
         // silently zeroed the rate columns. Parse as a float and clamp.
         if let Ok(secs) = raw.trim().parse::<f64>() {
             config.interval = secs_to_duration(secs);
+            config.origins.set("interval", Origin::Env);
+        }
+    }
+    // Preferred over the file for the obvious reason: a session token is a
+    // credential, and putting one in a TOML that sits next to the binary is
+    // worse than exporting it for the length of a shell.
+    if let Ok(session) = std::env::var("CLASSG_SESSION") {
+        if !session.trim().is_empty() {
+            config.session = Some(session.trim().to_string());
+            config.origins.set("session", Origin::Env);
         }
     }
 }
@@ -226,7 +317,7 @@ fn apply_env(config: &mut Config) {
 /// Search order matches `bbs-launcher`: next to the binary, in the working
 /// directory, then under `~/.config`. Returns `None` when none exist, which
 /// is a normal, silent outcome.
-pub fn find_config() -> Option<PathBuf> {
+pub(crate) fn find_config() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
     if let Ok(exe) = std::env::current_exe() {
@@ -247,14 +338,14 @@ pub fn find_config() -> Option<PathBuf> {
 /// Matches an interface or device name against one of the ignore patterns.
 /// Only a trailing `*` is special — full globbing would be a dependency and a
 /// surprise, and every real pattern here is a prefix.
-pub fn name_matches(name: &str, pattern: &str) -> bool {
+pub(crate) fn name_matches(name: &str, pattern: &str) -> bool {
     match pattern.strip_suffix('*') {
         Some(prefix) => name.starts_with(prefix),
         None => name == pattern,
     }
 }
 
-pub fn is_ignored(name: &str, patterns: &[impl AsRef<str>]) -> bool {
+pub(crate) fn is_ignored(name: &str, patterns: &[impl AsRef<str>]) -> bool {
     patterns.iter().any(|p| name_matches(name, p.as_ref()))
 }
 
@@ -277,6 +368,44 @@ mod tests {
         assert_eq!(config.api, "http://pi.local:9000");
         assert_eq!(config.interval, secs_to_duration(DEFAULT_INTERVAL_SECS));
         assert_eq!(config.usb_vendor_ids.len(), DEFAULT_USB_VENDOR_IDS.len());
+    }
+
+    #[test]
+    fn every_value_reports_which_tier_set_it() {
+        let mut config = Config::default();
+        // Nothing has been applied, so everything is a default -- including a
+        // key nobody has ever heard of, which must not panic.
+        assert_eq!(config.origins.of("api"), Origin::Default);
+        assert_eq!(config.origins.of("nonsense"), Origin::Default);
+
+        let file: ConfigFile =
+            toml::from_str("[dash]\napi = \"http://pi.local:9000\"\ntheme = \"green\"\n").unwrap();
+        apply_file(&mut config, file);
+        assert_eq!(config.origins.of("api"), Origin::File);
+        assert_eq!(config.origins.of("theme"), Origin::File);
+        assert_eq!(config.origins.of("glyphs"), Origin::Default);
+
+        // The command line is last and wins, and says so.
+        config.api = "http://pi:1".to_string();
+        config.origins.set("api", Origin::Cli);
+        assert_eq!(config.origins.of("api"), Origin::Cli);
+        assert_eq!(Origin::Cli.label(), "command line");
+    }
+
+    #[test]
+    fn a_blank_session_in_a_file_resolves_to_no_session() {
+        // Otherwise the poller sends `classg_session=` on every request and
+        // the API answers 401 to a dashboard that never had a credential.
+        let mut config = Config::default();
+        let file: ConfigFile = toml::from_str("[dash]\nsession = \"   \"\n").unwrap();
+        apply_file(&mut config, file);
+        assert_eq!(config.session.as_deref(), Some("   "));
+        // load_config normalises on the way out; do the same thing it does.
+        config.session = config
+            .session
+            .map(|token| token.trim().to_string())
+            .filter(|token| !token.is_empty());
+        assert!(config.session.is_none());
     }
 
     #[test]

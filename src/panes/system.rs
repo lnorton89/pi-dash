@@ -19,12 +19,12 @@ use super::{page_size, read_trimmed};
 /// pane about 240 columns wide — past anything the system pane is given on a
 /// real screen. At the default two-second cadence it is sixteen minutes of
 /// history and 4 kB of f64, which is not a number worth tuning.
-pub const HISTORY_LEN: usize = 480;
+pub(crate) const HISTORY_LEN: usize = 480;
 
 /// Per-core samples kept for the sparkline beside each core meter. Far shorter
 /// than the aggregate window: the sparkline is a handful of columns wide, and
 /// on a 16-core box this is sixteen of them.
-pub const CORE_HISTORY_LEN: usize = 64;
+pub(crate) const CORE_HISTORY_LEN: usize = 64;
 
 /// `/proc` reports CPU time in USER_HZ, which Linux fixes at 100 for the
 /// procfs ABI regardless of the kernel's internal CONFIG_HZ. The aggregate
@@ -33,19 +33,19 @@ const USER_HZ: f64 = 100.0;
 
 /// One row of `/proc/stat`'s `cpu`/`cpuN` lines.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CpuTimes {
-    pub user: u64,
-    pub nice: u64,
-    pub system: u64,
-    pub idle: u64,
-    pub iowait: u64,
-    pub irq: u64,
-    pub softirq: u64,
-    pub steal: u64,
+pub(crate) struct CpuTimes {
+    pub(crate) user: u64,
+    pub(crate) nice: u64,
+    pub(crate) system: u64,
+    pub(crate) idle: u64,
+    pub(crate) iowait: u64,
+    pub(crate) irq: u64,
+    pub(crate) softirq: u64,
+    pub(crate) steal: u64,
 }
 
 impl CpuTimes {
-    pub fn total(&self) -> u64 {
+    pub(crate) fn total(&self) -> u64 {
         self.user
             + self.nice
             + self.system
@@ -58,14 +58,14 @@ impl CpuTimes {
 
     /// Idle *and* iowait. A Pi waiting on a slow SD card is not busy, and
     /// counting iowait as load makes every write burst look like a CPU spike.
-    pub fn idle_all(&self) -> u64 {
+    pub(crate) fn idle_all(&self) -> u64 {
         self.idle + self.iowait
     }
 
     /// Busy percentage over the interval between `prev` and `self`.
     /// `None` when there is no usable delta — the first sample, or a counter
     /// that went backwards because the sampler was restarted.
-    pub fn usage_since(&self, prev: &CpuTimes) -> Option<f64> {
+    pub(crate) fn usage_since(&self, prev: &CpuTimes) -> Option<f64> {
         let total = self.total().checked_sub(prev.total())?;
         let idle = self.idle_all().saturating_sub(prev.idle_all());
         if total == 0 {
@@ -78,7 +78,7 @@ impl CpuTimes {
 /// Parses one `cpu`/`cpuN` line. Fields past `steal` (guest, guest_nice) are
 /// ignored: guest time is already counted inside `user`, so adding it would
 /// double-count and make totals drift.
-pub fn parse_cpu_line(line: &str) -> Option<(String, CpuTimes)> {
+pub(crate) fn parse_cpu_line(line: &str) -> Option<(String, CpuTimes)> {
     let mut fields = line.split_whitespace();
     let label = fields.next()?;
     if !label.starts_with("cpu") {
@@ -106,7 +106,7 @@ pub fn parse_cpu_line(line: &str) -> Option<(String, CpuTimes)> {
 
 /// Splits `/proc/stat` into the aggregate line and the per-core lines, in
 /// core order.
-pub fn parse_stat(text: &str) -> (Option<CpuTimes>, Vec<CpuTimes>) {
+pub(crate) fn parse_stat(text: &str) -> (Option<CpuTimes>, Vec<CpuTimes>) {
     let mut aggregate = None;
     let mut cores = Vec::new();
     for line in text.lines() {
@@ -123,28 +123,28 @@ pub fn parse_stat(text: &str) -> (Option<CpuTimes>, Vec<CpuTimes>) {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct MemInfo {
-    pub total_kb: u64,
-    pub available_kb: u64,
-    pub swap_total_kb: u64,
-    pub swap_free_kb: u64,
-    pub buffers_kb: u64,
-    pub cached_kb: u64,
+pub(crate) struct MemInfo {
+    pub(crate) total_kb: u64,
+    pub(crate) available_kb: u64,
+    pub(crate) swap_total_kb: u64,
+    pub(crate) swap_free_kb: u64,
+    pub(crate) buffers_kb: u64,
+    pub(crate) cached_kb: u64,
 }
 
 impl MemInfo {
-    pub fn used_kb(&self) -> u64 {
+    pub(crate) fn used_kb(&self) -> u64 {
         self.total_kb.saturating_sub(self.available_kb)
     }
 
-    pub fn used_pct(&self) -> f64 {
+    pub(crate) fn used_pct(&self) -> f64 {
         if self.total_kb == 0 {
             return 0.0;
         }
         self.used_kb() as f64 * 100.0 / self.total_kb as f64
     }
 
-    pub fn swap_used_kb(&self) -> u64 {
+    pub(crate) fn swap_used_kb(&self) -> u64 {
         self.swap_total_kb.saturating_sub(self.swap_free_kb)
     }
 }
@@ -152,7 +152,7 @@ impl MemInfo {
 /// Parses `/proc/meminfo`. Uses MemAvailable, not MemFree: on a Pi running
 /// Docker the page cache legitimately eats everything free, and MemFree would
 /// have this pane permanently claiming the box is out of memory.
-pub fn parse_meminfo(text: &str) -> MemInfo {
+pub(crate) fn parse_meminfo(text: &str) -> MemInfo {
     let mut mem = MemInfo::default();
     for line in text.lines() {
         let Some((key, rest)) = line.split_once(':') else {
@@ -175,7 +175,7 @@ pub fn parse_meminfo(text: &str) -> MemInfo {
 }
 
 /// `(load1, load5, load15, runnable, total_tasks)` from `/proc/loadavg`.
-pub fn parse_loadavg(text: &str) -> Option<([f64; 3], u64, u64)> {
+pub(crate) fn parse_loadavg(text: &str) -> Option<([f64; 3], u64, u64)> {
     let fields: Vec<&str> = text.split_whitespace().collect();
     let load = [
         fields.first()?.parse().ok()?,
@@ -191,7 +191,7 @@ pub fn parse_loadavg(text: &str) -> Option<([f64; 3], u64, u64)> {
 }
 
 /// Seconds since boot from `/proc/uptime`.
-pub fn parse_uptime(text: &str) -> Option<u64> {
+pub(crate) fn parse_uptime(text: &str) -> Option<u64> {
     text.split_whitespace()
         .next()?
         .parse::<f64>()
@@ -201,13 +201,13 @@ pub fn parse_uptime(text: &str) -> Option<u64> {
 
 /// The fields of `/proc/<pid>/stat` this pane uses.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PidStat {
-    pub pid: i32,
-    pub comm: String,
-    pub state: char,
+pub(crate) struct PidStat {
+    pub(crate) pid: i32,
+    pub(crate) comm: String,
+    pub(crate) state: char,
     /// utime + stime, in USER_HZ.
-    pub cpu_ticks: u64,
-    pub rss_pages: u64,
+    pub(crate) cpu_ticks: u64,
+    pub(crate) rss_pages: u64,
 }
 
 /// Parses one `/proc/<pid>/stat`.
@@ -217,7 +217,7 @@ pub struct PidStat {
 /// parentheses (`(Web Content)`, `((sd-pam))`). Every naive field-index parse
 /// of this file is wrong for exactly those processes, which on a desktop is
 /// most of them.
-pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
+pub(crate) fn parse_pid_stat(text: &str) -> Option<PidStat> {
     let open = text.find('(')?;
     let close = text.rfind(')')?;
     if close < open {
@@ -245,25 +245,25 @@ pub fn parse_pid_stat(text: &str) -> Option<PidStat> {
 
 /// One row of the process table.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct ProcRow {
-    pub pid: i32,
-    pub name: String,
-    pub state: char,
+pub(crate) struct ProcRow {
+    pub(crate) pid: i32,
+    pub(crate) name: String,
+    pub(crate) state: char,
     /// Percent of *one* core, as `top` reports it — a four-thread build can
     /// legitimately read 380% on a Pi 4.
-    pub cpu_pct: f64,
-    pub rss_kb: u64,
+    pub(crate) cpu_pct: f64,
+    pub(crate) rss_kb: u64,
     /// The full argument vector, space-joined. Empty for a kernel thread,
     /// which has no `cmdline` at all, and empty for every row the pane was
     /// never going to show — see [`SystemPane::sample`].
-    pub cmdline: String,
+    pub(crate) cmdline: String,
 }
 
 /// Turns two `/proc/<pid>/stat` samples into a sorted process table.
 /// Processes that did not exist in `prev` are reported at 0% rather than
 /// credited with their whole lifetime's CPU in one interval — that is what
 /// makes a freshly forked `apt` briefly appear to be using 4000%.
-pub fn process_rows(
+pub(crate) fn process_rows(
     current: &[PidStat],
     prev: &HashMap<i32, u64>,
     elapsed: Duration,
@@ -308,30 +308,30 @@ pub fn process_rows(
 
 /// State of the system pane between samples.
 #[derive(Debug)]
-pub struct SystemPane {
+pub(crate) struct SystemPane {
     page_bytes: u64,
     prev_aggregate: Option<CpuTimes>,
     prev_cores: Vec<CpuTimes>,
     prev_proc_ticks: HashMap<i32, u64>,
     last_sample: Option<Instant>,
 
-    pub cpu_pct: Option<f64>,
+    pub(crate) cpu_pct: Option<f64>,
     /// Aggregate CPU as a fraction, oldest first, for the history graph.
     /// Only real readings land here — the first sample has nothing to
     /// difference against, and a 0.0 placeholder would draw a trough the box
     /// never had.
-    pub cpu_history: Vec<f64>,
-    pub core_pct: Vec<Option<f64>>,
+    pub(crate) cpu_history: Vec<f64>,
+    pub(crate) core_pct: Vec<Option<f64>>,
     /// One short history per core, in core order, for the sparklines.
-    pub core_history: Vec<Vec<f64>>,
-    pub mem: MemInfo,
-    pub load: [f64; 3],
-    pub runnable: u64,
-    pub task_count: u64,
-    pub uptime_secs: u64,
-    pub procs: Vec<ProcRow>,
+    pub(crate) core_history: Vec<Vec<f64>>,
+    pub(crate) mem: MemInfo,
+    pub(crate) load: [f64; 3],
+    pub(crate) runnable: u64,
+    pub(crate) task_count: u64,
+    pub(crate) uptime_secs: u64,
+    pub(crate) procs: Vec<ProcRow>,
     /// Set when `/proc` is not readable at all, i.e. this is not Linux.
-    pub unavailable: Option<String>,
+    pub(crate) unavailable: Option<String>,
 }
 
 impl Default for SystemPane {
@@ -358,7 +358,7 @@ impl Default for SystemPane {
 }
 
 impl SystemPane {
-    pub fn sample(&mut self, now: Instant) {
+    pub(crate) fn sample(&mut self, now: Instant) {
         let Some(stat) = read_trimmed("/proc/stat") else {
             self.unavailable = Some("/proc/stat is not readable — not a Linux box?".to_string());
             return;

@@ -16,24 +16,24 @@
 //! (ClassG ADR-0003) and it is also what makes the binary runnable on a dev
 //! machine that is not a Pi at all.
 
-pub mod classg;
-pub mod health;
-pub mod radios;
-pub mod system;
+pub(crate) mod classg;
+pub(crate) mod health;
+pub(crate) mod radios;
+pub(crate) mod system;
 
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// Reads a small `/proc` or `/sys` file, trimmed. `None` for anything that
 /// does not exist or cannot be read — callers are expected to cope.
-pub fn read_trimmed(path: impl AsRef<Path>) -> Option<String> {
+pub(crate) fn read_trimmed(path: impl AsRef<Path>) -> Option<String> {
     std::fs::read_to_string(path)
         .ok()
         .map(|s| s.trim().to_string())
 }
 
 /// Reads a `/sys` file that holds a single integer.
-pub fn read_u64(path: impl AsRef<Path>) -> Option<u64> {
+pub(crate) fn read_u64(path: impl AsRef<Path>) -> Option<u64> {
     read_trimmed(path)?.parse().ok()
 }
 
@@ -41,7 +41,7 @@ pub fn read_u64(path: impl AsRef<Path>) -> Option<u64> {
 /// fails, or writes nothing. stderr is discarded on purpose: `vcgencmd` on a
 /// non-Pi prints a complaint that is not interesting once the `None` has
 /// already told the caller what it needs to know.
-pub fn command_output(program: &str, args: &[&str]) -> Option<String> {
+pub(crate) fn command_output(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
@@ -62,7 +62,7 @@ pub fn command_output(program: &str, args: &[&str]) -> Option<String> {
 /// multi-page-size architecture, and while Raspberry Pi OS builds a 4K kernel
 /// today, a hard-coded constant would silently report memory 4x or 16x wrong
 /// on a kernel that did not. AT_PAGESZ is key 6; entries are `usize` pairs.
-pub fn page_size() -> u64 {
+pub(crate) fn page_size() -> u64 {
     const AT_PAGESZ: u64 = 6;
     const FALLBACK: u64 = 4096;
     let word = std::mem::size_of::<usize>();

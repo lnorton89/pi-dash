@@ -11,10 +11,10 @@ use super::{command_output, read_trimmed, read_u64};
 /// 80 C is where a Pi 4 starts soft-capping the ARM clock, 85 C hard. The
 /// meter spans 30..85 so the bar position means something absolute rather
 /// than being a percentage of nothing.
-pub const TEMP_METER_LO: f64 = 30.0;
-pub const TEMP_METER_HI: f64 = 85.0;
-pub const TEMP_WARN_C: f64 = 65.0;
-pub const TEMP_HOT_C: f64 = 75.0;
+pub(crate) const TEMP_METER_LO: f64 = 30.0;
+pub(crate) const TEMP_METER_HI: f64 = 85.0;
+pub(crate) const TEMP_WARN_C: f64 = 65.0;
+pub(crate) const TEMP_HOT_C: f64 = 75.0;
 
 /// The four conditions `get_throttled` reports, in one nibble.
 ///
@@ -24,11 +24,11 @@ pub const TEMP_HOT_C: f64 = 75.0;
 /// and you missed it, which is exactly the state this box spends most of its
 /// life in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct ThrottleFlags {
-    pub under_voltage: bool,
-    pub arm_capped: bool,
-    pub throttled: bool,
-    pub soft_temp_limit: bool,
+pub(crate) struct ThrottleFlags {
+    pub(crate) under_voltage: bool,
+    pub(crate) arm_capped: bool,
+    pub(crate) throttled: bool,
+    pub(crate) soft_temp_limit: bool,
 }
 
 impl ThrottleFlags {
@@ -41,7 +41,7 @@ impl ThrottleFlags {
         }
     }
 
-    pub fn any(&self) -> bool {
+    pub(crate) fn any(&self) -> bool {
         self.under_voltage || self.arm_capped || self.throttled || self.soft_temp_limit
     }
 
@@ -52,7 +52,7 @@ impl ThrottleFlags {
     /// at it*; the sticky ones are stated flatly because they are history.
     /// They are rendered on separate rows, so the sticky wording does not have
     /// to repeat "since boot" in every label.
-    pub fn labels(&self, tense: Tense) -> Vec<&'static str> {
+    pub(crate) fn labels(&self, tense: Tense) -> Vec<&'static str> {
         let mut out = Vec::new();
         if self.under_voltage {
             out.push(match tense {
@@ -83,21 +83,21 @@ impl ThrottleFlags {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tense {
+pub(crate) enum Tense {
     Now,
     SinceBoot,
 }
 
 /// A decoded `get_throttled` register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Throttle {
-    pub raw: u32,
-    pub now: ThrottleFlags,
-    pub since_boot: ThrottleFlags,
+pub(crate) struct Throttle {
+    pub(crate) raw: u32,
+    pub(crate) now: ThrottleFlags,
+    pub(crate) since_boot: ThrottleFlags,
 }
 
 impl Throttle {
-    pub fn decode(raw: u32) -> Self {
+    pub(crate) fn decode(raw: u32) -> Self {
         Throttle {
             raw,
             now: ThrottleFlags::from_nibble(raw & 0xF),
@@ -105,7 +105,7 @@ impl Throttle {
         }
     }
 
-    pub fn clean(&self) -> bool {
+    pub(crate) fn clean(&self) -> bool {
         !self.now.any() && !self.since_boot.any()
     }
 }
@@ -115,7 +115,7 @@ impl Throttle {
 /// Accepts a bare value too, because `vcgencmd` has shipped both forms and a
 /// dashboard that silently reports "clean" because the prefix changed would be
 /// worse than useless. Decimal is accepted for the same reason.
-pub fn parse_throttled(text: &str) -> Option<u32> {
+pub(crate) fn parse_throttled(text: &str) -> Option<u32> {
     let value = text.trim().rsplit('=').next()?.trim();
     if let Some(hex) = value
         .strip_prefix("0x")
@@ -128,7 +128,7 @@ pub fn parse_throttled(text: &str) -> Option<u32> {
 }
 
 /// Parses `vcgencmd measure_volts core`, i.e. `volt=0.8563V`.
-pub fn parse_volts(text: &str) -> Option<f64> {
+pub(crate) fn parse_volts(text: &str) -> Option<f64> {
     text.trim()
         .rsplit('=')
         .next()?
@@ -140,13 +140,13 @@ pub fn parse_volts(text: &str) -> Option<f64> {
 
 /// Parses `vcgencmd measure_clock arm`, i.e. `frequency(48)=1500000000`, into
 /// MHz.
-pub fn parse_clock_mhz(text: &str) -> Option<u64> {
+pub(crate) fn parse_clock_mhz(text: &str) -> Option<u64> {
     let hz: u64 = text.trim().rsplit('=').next()?.trim().parse().ok()?;
     Some(hz / 1_000_000)
 }
 
 /// Millidegrees from `/sys/class/thermal/thermal_zone0/temp` into degrees.
-pub fn parse_thermal_millidegrees(text: &str) -> Option<f64> {
+pub(crate) fn parse_thermal_millidegrees(text: &str) -> Option<f64> {
     let milli: i64 = text.trim().parse().ok()?;
     // A zone that reads 0 is a zone that is not wired up, not a Pi at
     // absolute-ish zero.
@@ -154,13 +154,13 @@ pub fn parse_thermal_millidegrees(text: &str) -> Option<f64> {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct DiskUsage {
-    pub used_kb: u64,
-    pub total_kb: u64,
+pub(crate) struct DiskUsage {
+    pub(crate) used_kb: u64,
+    pub(crate) total_kb: u64,
 }
 
 impl DiskUsage {
-    pub fn pct(&self) -> f64 {
+    pub(crate) fn pct(&self) -> f64 {
         if self.total_kb == 0 {
             return 0.0;
         }
@@ -171,7 +171,7 @@ impl DiskUsage {
 /// Parses the last line of `df -P -k /`. POSIX output mode matters: without
 /// `-P`, a long device name wraps onto its own line and the fields land in
 /// different columns.
-pub fn parse_df(text: &str) -> Option<DiskUsage> {
+pub(crate) fn parse_df(text: &str) -> Option<DiskUsage> {
     let line = text.lines().last()?;
     let fields: Vec<&str> = line.split_whitespace().collect();
     Some(DiskUsage {
@@ -186,7 +186,7 @@ pub fn parse_df(text: &str) -> Option<DiskUsage> {
 /// lists both `mmcblk0` and `mmcblk0p2`, and the parent already includes the
 /// child. Loop and device-mapper devices are skipped for the same reason:
 /// Docker's overlay traffic shows up under the backing disk anyway.
-pub fn parse_diskstats(text: &str) -> (u64, u64) {
+pub(crate) fn parse_diskstats(text: &str) -> (u64, u64) {
     let mut sectors_read = 0u64;
     let mut sectors_written = 0u64;
     for line in text.lines() {
@@ -229,13 +229,13 @@ fn is_whole_disk(name: &str) -> bool {
 const SECTOR_BYTES: u64 = 512;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct IoRates {
-    pub read_bps: f64,
-    pub write_bps: f64,
+pub(crate) struct IoRates {
+    pub(crate) read_bps: f64,
+    pub(crate) write_bps: f64,
 }
 
 #[derive(Debug, Default)]
-pub struct HealthPane {
+pub(crate) struct HealthPane {
     prev_sectors: Option<(u64, u64)>,
     last_sample: Option<Instant>,
     /// `df` and `vcgencmd` fork. Disk usage moves slowly enough that once
@@ -243,21 +243,21 @@ pub struct HealthPane {
     /// read every time.
     sample_count: u64,
 
-    pub temp_c: Option<f64>,
-    pub volts: Option<f64>,
-    pub arm_mhz: Option<u64>,
-    pub max_mhz: Option<u64>,
+    pub(crate) temp_c: Option<f64>,
+    pub(crate) volts: Option<f64>,
+    pub(crate) arm_mhz: Option<u64>,
+    pub(crate) max_mhz: Option<u64>,
     /// `None` means "could not be read", which is *not* the same as clean.
     /// The Bash version defaulted the register to 0 when `vcgencmd` was
     /// missing and then printed "OK — clean since boot", confidently lying on
     /// exactly the machines that could not tell.
-    pub throttle: Option<Throttle>,
-    pub disk: Option<DiskUsage>,
-    pub io: IoRates,
+    pub(crate) throttle: Option<Throttle>,
+    pub(crate) disk: Option<DiskUsage>,
+    pub(crate) io: IoRates,
 }
 
 impl HealthPane {
-    pub fn sample(&mut self, now: Instant) {
+    pub(crate) fn sample(&mut self, now: Instant) {
         self.temp_c = read_trimmed("/sys/class/thermal/thermal_zone0/temp")
             .as_deref()
             .and_then(parse_thermal_millidegrees);
@@ -285,7 +285,7 @@ impl HealthPane {
             .and_then(parse_throttled)
             .map(Throttle::decode);
 
-        if self.sample_count % 5 == 0 || self.disk.is_none() {
+        if self.sample_count.is_multiple_of(5) || self.disk.is_none() {
             self.disk = command_output("df", &["-P", "-k", "/"])
                 .as_deref()
                 .and_then(parse_df);

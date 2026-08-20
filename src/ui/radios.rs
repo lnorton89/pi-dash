@@ -29,7 +29,7 @@ const CH_W: usize = 5;
 /// Columns the table needs before a driver column is worth adding.
 const DRIVER_MIN_COLS: usize = 12;
 
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let block = pane_block(" Radios & network ", app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);

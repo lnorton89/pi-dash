@@ -12,7 +12,7 @@ use crate::panes::system::SystemPane;
 use crate::ui::gauge::Glyphs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
+pub(crate) enum Mode {
     Normal,
     Help,
 }
@@ -21,7 +21,7 @@ pub enum Mode {
 /// visible on a terminal too narrow for the two-column layout; in the wide
 /// layout every pane is on screen at once and focus is irrelevant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Pane {
+pub(crate) enum Pane {
     System,
     Health,
     Radios,
@@ -29,9 +29,9 @@ pub enum Pane {
 }
 
 impl Pane {
-    pub const ALL: [Pane; 4] = [Pane::System, Pane::Health, Pane::Radios, Pane::Classg];
+    pub(crate) const ALL: [Pane; 4] = [Pane::System, Pane::Health, Pane::Radios, Pane::Classg];
 
-    pub fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         match self {
             Pane::System => "System",
             Pane::Health => "Pi health",
@@ -40,38 +40,42 @@ impl Pane {
         }
     }
 
-    pub fn next(self) -> Pane {
+    pub(crate) fn next(self) -> Pane {
         let i = Self::ALL.iter().position(|p| *p == self).unwrap_or(0);
         Self::ALL[(i + 1) % Self::ALL.len()]
     }
 
-    pub fn previous(self) -> Pane {
+    pub(crate) fn previous(self) -> Pane {
         let i = Self::ALL.iter().position(|p| *p == self).unwrap_or(0);
         Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()]
     }
 }
 
-pub struct App {
-    pub config: Config,
-    pub mode: Mode,
-    pub focus: Pane,
-    pub host: String,
-    pub accent: Color,
+pub(crate) struct App {
+    pub(crate) config: Config,
+    pub(crate) mode: Mode,
+    pub(crate) focus: Pane,
+    pub(crate) host: String,
+    pub(crate) accent: Color,
     /// Resolved once here rather than parsed per frame: every meter, graph
     /// and pane border on screen asks for it.
-    pub glyphs: Glyphs,
-    pub system: SystemPane,
-    pub health: HealthPane,
-    pub radios: RadiosPane,
-    pub classg: ClassgPane,
+    pub(crate) glyphs: Glyphs,
+    pub(crate) system: SystemPane,
+    pub(crate) health: HealthPane,
+    pub(crate) radios: RadiosPane,
+    pub(crate) classg: ClassgPane,
     /// Local samples taken since start. Panes that only refresh every fifth
     /// sample key off their own counters; this is for the footer.
-    pub samples: u64,
+    pub(crate) samples: u64,
 }
 
 impl App {
-    pub fn new(config: Config) -> Self {
-        let classg = ClassgPane::spawn(config.api.clone(), config.api_interval);
+    pub(crate) fn new(config: Config) -> Self {
+        let classg = ClassgPane::spawn(
+            config.api.clone(),
+            config.session.clone(),
+            config.api_interval,
+        );
         App {
             accent: color_from_str(&config.theme),
             glyphs: Glyphs::parse(&config.glyphs),
@@ -93,7 +97,7 @@ impl App {
     /// One round of local sampling. The ClassG pane is not touched here: it
     /// runs on its own clock in its own thread, so a slow API never delays
     /// the temperature reading.
-    pub fn sample(&mut self, now: Instant) {
+    pub(crate) fn sample(&mut self, now: Instant) {
         self.system.sample(now);
         self.health.sample(now);
         self.radios.sample(
@@ -107,7 +111,7 @@ impl App {
 
 /// Maps a colour name to a ratatui colour. Unknown names fall back to cyan
 /// rather than erroring: a typo in the theme should not stop the dashboard.
-pub fn color_from_str(name: &str) -> Color {
+pub(crate) fn color_from_str(name: &str) -> Color {
     match name.trim().to_ascii_lowercase().as_str() {
         "red" => Color::Red,
         "green" => Color::Green,

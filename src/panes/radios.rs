@@ -21,7 +21,7 @@ use crate::config::is_ignored;
 /// dependency on `iw`, which is not installed on the target Pi, and reports
 /// what the kernel actually has rather than what setup-monitor.sh last asked
 /// for.
-pub const ARPHRD_IEEE80211_RADIOTAP: u64 = 803;
+pub(crate) const ARPHRD_IEEE80211_RADIOTAP: u64 = 803;
 
 /// Substrings in a USB device's manufacturer/product strings that mark it as
 /// a radio even when its vendor ID is not on the list. Carried over from the
@@ -31,9 +31,9 @@ const RADIO_NAME_HINTS: [&str; 4] = ["mediatek", "rtl-sdr", "rtlsdr", "802.11"];
 
 /// One row of `/proc/net/dev`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct IfaceCounters {
-    pub rx_bytes: u64,
-    pub tx_bytes: u64,
+pub(crate) struct IfaceCounters {
+    pub(crate) rx_bytes: u64,
+    pub(crate) tx_bytes: u64,
 }
 
 /// Parses `/proc/net/dev`.
@@ -43,7 +43,7 @@ pub struct IfaceCounters {
 /// the byte count runs straight into the colon (`eth0:12345678901`) and a
 /// whitespace split silently loses the interface. Long interface names
 /// (`enx00e04c680001`) do the same thing from the other side.
-pub fn parse_net_dev(text: &str) -> Vec<(String, IfaceCounters)> {
+pub(crate) fn parse_net_dev(text: &str) -> Vec<(String, IfaceCounters)> {
     let mut out = Vec::new();
     for line in text.lines() {
         let Some((name, rest)) = line.split_once(':') else {
@@ -69,7 +69,7 @@ pub fn parse_net_dev(text: &str) -> Vec<(String, IfaceCounters)> {
 }
 
 /// Parses the channel out of `iw dev <if> info`.
-pub fn parse_iw_channel(text: &str) -> Option<u32> {
+pub(crate) fn parse_iw_channel(text: &str) -> Option<u32> {
     text.lines()
         .map(str::trim)
         .find_map(|line| line.strip_prefix("channel "))
@@ -78,41 +78,41 @@ pub fn parse_iw_channel(text: &str) -> Option<u32> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WirelessMode {
+pub(crate) enum WirelessMode {
     Monitor,
     Managed,
 }
 
 /// An interface as the pane displays it.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Iface {
-    pub name: String,
+pub(crate) struct Iface {
+    pub(crate) name: String,
     /// `up`, `down`, `unknown`, … straight from `operstate`.
-    pub state: String,
-    pub rx_bps: f64,
-    pub tx_bps: f64,
+    pub(crate) state: String,
+    pub(crate) rx_bps: f64,
+    pub(crate) tx_bps: f64,
     /// `None` for a wired interface.
-    pub mode: Option<WirelessMode>,
-    pub channel: Option<u32>,
+    pub(crate) mode: Option<WirelessMode>,
+    pub(crate) channel: Option<u32>,
     /// Kernel module behind the interface — `mt7921u`, `brcmfmac`. This is
     /// the fact that tells two identical-looking `wlan*` entries apart, and
     /// the one you need when a monitor-mode capture is not producing frames:
     /// which of the adapters plugged into this Pi is which.
-    pub driver: Option<String>,
+    pub(crate) driver: Option<String>,
 }
 
 /// A USB device the dashboard considers a radio.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UsbRadio {
+pub(crate) struct UsbRadio {
     /// `0bda:2838`.
-    pub id: String,
-    pub description: String,
+    pub(crate) id: String,
+    pub(crate) description: String,
 }
 
 /// True when a `vendor:product` ID and its description look like a radio.
 /// Vendor IDs are compared case-insensitively because sysfs writes them
 /// lowercase and `lsusb` has not always agreed.
-pub fn is_radio(id: &str, description: &str, vendor_ids: &[impl AsRef<str>]) -> bool {
+pub(crate) fn is_radio(id: &str, description: &str, vendor_ids: &[impl AsRef<str>]) -> bool {
     let vendor = id.split(':').next().unwrap_or(id).to_ascii_lowercase();
     if vendor_ids.iter().any(|want| {
         want.as_ref()
@@ -127,7 +127,7 @@ pub fn is_radio(id: &str, description: &str, vendor_ids: &[impl AsRef<str>]) -> 
 
 /// Parses one `lsusb` line:
 /// `Bus 001 Device 004: ID 0bda:2838 Realtek Semiconductor Corp. RTL2838`.
-pub fn parse_lsusb_line(line: &str) -> Option<UsbRadio> {
+pub(crate) fn parse_lsusb_line(line: &str) -> Option<UsbRadio> {
     let after_id = line.split(" ID ").nth(1)?;
     let mut parts = after_id.splitn(2, char::is_whitespace);
     let id = parts.next()?.trim().to_string();
@@ -177,15 +177,15 @@ fn read_usb_from_lsusb() -> Vec<UsbRadio> {
 }
 
 #[derive(Debug, Default)]
-pub struct RadiosPane {
+pub(crate) struct RadiosPane {
     prev: HashMap<String, IfaceCounters>,
     last_sample: Option<Instant>,
     sample_count: u64,
     usb_cache: Vec<UsbRadio>,
     channel_cache: HashMap<String, u32>,
 
-    pub ifaces: Vec<Iface>,
-    pub usb: Vec<UsbRadio>,
+    pub(crate) ifaces: Vec<Iface>,
+    pub(crate) usb: Vec<UsbRadio>,
 }
 
 /// The driver behind an interface, from the `device/driver` symlink in sysfs.
@@ -199,7 +199,7 @@ fn read_driver(sys: &std::path::Path) -> Option<String> {
 }
 
 impl RadiosPane {
-    pub fn sample(&mut self, now: Instant, vendor_ids: &[String], ignore: &[String]) {
+    pub(crate) fn sample(&mut self, now: Instant, vendor_ids: &[String], ignore: &[String]) {
         let elapsed = self
             .last_sample
             .map(|then| now.saturating_duration_since(then))
@@ -250,7 +250,7 @@ impl RadiosPane {
         // when the hopper moves it, so refresh it on the same slow cadence as
         // the USB scan. It is optional: the Pi this targets does not have it
         // installed, and the pane reads fine without a channel column.
-        if self.sample_count % 5 == 0 {
+        if self.sample_count.is_multiple_of(5) {
             self.refresh_channels();
             self.usb_cache = read_usb_from_sysfs().unwrap_or_else(read_usb_from_lsusb);
         }
@@ -283,7 +283,7 @@ impl RadiosPane {
     /// exactly like a device would. Between them sit a blank line and the USB
     /// section title. Under-counting here does not scroll the pane, it clips
     /// it, and the row that goes is the one saying the adapters are gone.
-    pub fn content_rows(&self) -> u16 {
+    pub(crate) fn content_rows(&self) -> u16 {
         let table = |rows: usize| if rows == 0 { 1 } else { rows + 1 };
         (table(self.ifaces.len()) + 2 + table(self.usb.len())) as u16
     }
@@ -294,7 +294,7 @@ impl RadiosPane {
 /// An adapter that is re-plugged comes back with its counters at zero, so the
 /// delta goes negative for exactly one sample; `saturating_sub` reports that
 /// as 0 B/s rather than as a rate of several exabytes.
-pub fn rate(current: u64, previous: u64, elapsed: Duration) -> f64 {
+pub(crate) fn rate(current: u64, previous: u64, elapsed: Duration) -> f64 {
     let seconds = elapsed.as_secs_f64();
     if seconds <= 0.0 {
         return 0.0;

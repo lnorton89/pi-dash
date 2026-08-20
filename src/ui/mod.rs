@@ -14,11 +14,11 @@
 //! one. A shimmering border would repaint every cell every tick and hand the
 //! flicker straight back.
 
-pub mod classg;
-pub mod gauge;
-pub mod health;
-pub mod radios;
-pub mod system;
+pub(crate) mod classg;
+pub(crate) mod gauge;
+pub(crate) mod health;
+pub(crate) mod radios;
+pub(crate) mod system;
 
 use chrono::Local;
 use ratatui::{
@@ -35,12 +35,12 @@ use crate::ui::gauge::Glyphs;
 
 /// Green/amber/red, used identically by every pane so a colour means the same
 /// thing wherever you see it.
-pub const OK: Color = Color::Green;
-pub const WARN: Color = Color::Yellow;
-pub const BAD: Color = Color::Red;
-pub const DIM: Color = Color::DarkGray;
+pub(crate) const OK: Color = Color::Green;
+pub(crate) const WARN: Color = Color::Yellow;
+pub(crate) const BAD: Color = Color::Red;
+pub(crate) const DIM: Color = Color::DarkGray;
 
-pub fn draw(frame: &mut Frame, app: &mut App) {
+pub(crate) fn draw(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -161,7 +161,7 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App, wide: bool) {
 
 fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     let width = area.width.min(64);
-    let height = area.height.min(18);
+    let height = area.height.min(21);
     let popup = Rect {
         x: area.x + (area.width - width) / 2,
         y: area.y + (area.height - height) / 2,
@@ -197,9 +197,22 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
             app.config.interval.as_secs_f64(),
             app.config.api_interval.as_secs_f64()
         )),
+        // Whether a session is configured, never the token. This overlay is
+        // the thing somebody screenshots when asking why a pane is empty.
+        Line::from(format!(
+            "  session   {}",
+            match app.config.session {
+                Some(_) => "set — sent as the classg_session cookie",
+                None => "none — only /health and /auth/me are public",
+            }
+        )),
         Line::default(),
         Line::from(Span::styled(
-            "  env CLASSG_API and CLASSG_DASH_INTERVAL override the file.",
+            "  env CLASSG_API, CLASSG_SESSION and CLASSG_DASH_INTERVAL",
+            Style::default().fg(DIM),
+        )),
+        Line::from(Span::styled(
+            "  override the file.  pi-dash --print-config says which won.",
             Style::default().fg(DIM),
         )),
     ];
@@ -219,7 +232,7 @@ fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
 /// ASCII meter inside a Unicode box, which is what this did before, solves
 /// half of the framebuffer-console problem and leaves the frame in
 /// replacement characters.
-pub fn pane_block<'a>(title: &'a str, border: Color, glyphs: Glyphs) -> Block<'a> {
+pub(crate) fn pane_block<'a>(title: &'a str, border: Color, glyphs: Glyphs) -> Block<'a> {
     Block::default()
         .borders(Borders::ALL)
         .border_set(glyphs.border_set())
@@ -235,7 +248,7 @@ pub fn pane_block<'a>(title: &'a str, border: Color, glyphs: Glyphs) -> Block<'a
 
 /// A label/value line, with the label in the fixed-width gutter every pane
 /// shares so values line up down the whole column.
-pub fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
+pub(crate) fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
     let mut spans = vec![Span::styled(
         format!("  {label:<7}"),
         Style::default().fg(DIM),
@@ -249,7 +262,7 @@ pub fn field<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
 /// Every table on screen uses this, so a heading always looks like a heading
 /// and never like the first row of data — which is what a plain bold line
 /// looked like next to a process name.
-pub fn table_header<'a>(text: String) -> Line<'a> {
+pub(crate) fn table_header<'a>(text: String) -> Line<'a> {
     Line::from(Span::styled(
         text,
         Style::default().fg(DIM).add_modifier(Modifier::BOLD),
@@ -262,7 +275,7 @@ pub fn table_header<'a>(text: String) -> Line<'a> {
 /// wrapped — it is sliced wherever the pane ends, which is how a 45-column
 /// pane produced `1.9G reclaimab` and a load average cut off after the word
 /// `load`. Returns whether it fitted, so a caller can offer a shorter form.
-pub fn push_if_fits<'a>(
+pub(crate) fn push_if_fits<'a>(
     spans: &mut Vec<Span<'a>>,
     used: &mut usize,
     width: usize,
@@ -279,10 +292,10 @@ pub fn push_if_fits<'a>(
 
 /// The left gutter [`field`] establishes: two spaces plus a seven-column
 /// label. Tables line their first column up with it.
-pub const GUTTER: usize = 9;
+pub(crate) const GUTTER: usize = 9;
 
 /// Green below `warn`, amber below `bad`, red above.
-pub fn threshold_color(value: f64, warn: f64, bad: f64) -> Color {
+pub(crate) fn threshold_color(value: f64, warn: f64, bad: f64) -> Color {
     if value >= bad {
         BAD
     } else if value >= warn {

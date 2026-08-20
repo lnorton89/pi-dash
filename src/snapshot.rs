@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::config::Config;
-use crate::format::{human_kb, human_rate, human_rate_compact, uptime};
-use crate::panes::classg::{self, Snapshot};
+use crate::format::{human_bytes, human_kb, human_rate, human_rate_compact, short_age, uptime};
+use crate::panes::classg::{detection_class_label, Client, Slow, Snapshot};
 use crate::panes::health::{HealthPane, Tense, Throttle};
 use crate::panes::radios::{RadiosPane, WirelessMode};
 use crate::panes::system::SystemPane;
@@ -24,7 +24,7 @@ use crate::panes::system::SystemPane;
 /// the numbers being real.
 const SETTLE: Duration = Duration::from_millis(700);
 
-pub fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
+pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
     let mut system = SystemPane::default();
     let mut health = HealthPane::default();
     let mut radios = RadiosPane::default();
@@ -165,8 +165,10 @@ pub fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
 
     writeln!(out)?;
     writeln!(out, "classg  {}", config.api)?;
-    let agent = classg::build_agent();
-    print_classg(&classg::fetch(&agent, &config.api, 5, 5), out)?;
+    // A one-shot has no previous slow tier to carry forward and no second
+    // chance to fetch one, so it always asks for the whole picture.
+    let client = Client::new(config.api.clone(), config.session.clone());
+    print_classg(&client.poll(5, 5, true, &Slow::default()), out)?;
     Ok(())
 }
 
@@ -205,28 +207,182 @@ fn print_classg(snapshot: &Snapshot, out: &mut impl Write) -> Result<()> {
         writeln!(out, "  start it with: make dev   (or set CLASSG_API)")?;
         return Ok(());
     };
+
+    // The build string beats the bare version when /system answered: a
+    // revision is what tells you whether the binary on the Pi is the one you
+    // last deployed, and /health cannot say.
+    let build = snapshot
+        .slow
+        .system
+        .as_ref()
+        .map(|system| system.build_label())
+        .unwrap_or_else(|| health.version.clone());
     writeln!(
         out,
         "  status   {}  up {}s  {}",
-        health.status, health.uptime_s, health.version
+        health.status, health.uptime_s, build
     )?;
-    for sensor in &health.sensors {
+
+    if let Some(system) = &snapshot.slow.system {
+        // Free space on the filesystem detections land on, which is not
+        // necessarily the one the health pane above measured.
+        let disk = match (system.host.disk_free_bytes, system.host.disk_total_bytes) {
+            (Some(free), Some(total)) => {
+                format!("{} free of {}", human_bytes(free), human_bytes(total))
+            }
+            _ => "unavailable".to_string(),
+        };
         writeln!(
             out,
-            "  sensor   {:<12} {}  5m:{}  {}",
+            "  store    {}  {}  {}",
+            system.runtime.store, system.host.disk_path, disk
+        )?;
+    }
+
+    // Recording state before anything it affects. A paused stack reports
+    // healthy sensors, a connected fusion and an empty track list, which is
+    // line for line what a quiet sky looks like.
+    match &snapshot.monitoring {
+        Some(state) if state.enabled => writeln!(out, "  record   on")?,
+        Some(state) => writeln!(
+            out,
+            "  record   PAUSED  {} discarded  {}",
+            state.discarded,
+            state.reason.as_deref().unwrap_or("no reason given")
+        )?,
+        None => {}
+    }
+
+    if let Some(denied) = &snapshot.denied {
+        writeln!(out, "  auth     refused: {denied}")?;
+        if let Some(auth) = &snapshot.slow.auth {
+            if auth.setup_required {
+                writeln!(out, "           this unit has no accounts yet")?;
+            } else if auth.auth_enabled && !auth.authenticated {
+                writeln!(out, "           set CLASSG_SESSION to a session cookie")?;
+            }
+        }
+    }
+
+    for sensor in &health.sensors {
+        let state = match (sensor.healthy, sensor.optional) {
+            (true, _) => "ok",
+            (false, true) => "off",
+            (false, false) => "DOWN",
+        };
+        writeln!(
+            out,
+            "  sensor   {:<12} {:<5} beat {:<5} 5m:{:<6} {}",
             sensor.sensor_id,
-            if sensor.healthy { "ok" } else { "DOWN" },
+            state,
+            sensor
+                .seconds_since_heartbeat
+                .map(|s| format!("{s}s"))
+                .unwrap_or_else(|| "-".to_string()),
             sensor.detections_5m,
             sensor.reason.as_deref().unwrap_or("")
         )?;
     }
-    if let Some(page) = &snapshot.tracks {
-        writeln!(out, "  tracks   {} total", page.total)?;
+
+    let fusion = health.fusion.clone().unwrap_or_default();
+    writeln!(
+        out,
+        "  fusion   {}",
+        if fusion.connected {
+            match fusion.last_message.as_ref() {
+                Some(ts) => format!("connected, last message {}", short_age(ts.age_secs())),
+                None => "connected, no messages yet".to_string(),
+            }
+        } else if fusion.configured {
+            format!("DOWN  {}", fusion.reason.as_deref().unwrap_or(""))
+        } else {
+            "not configured".to_string()
+        }
+    )?;
+
+    // A capture or a sweep holds a radio exclusively, so either one is the
+    // explanation for a sensor that has only just gone quiet.
+    if let Some(capture) = snapshot.running_capture() {
+        writeln!(
+            out,
+            "  capture  running on {} ch{} for {}s",
+            capture.iface, capture.channel, capture.duration_s
+        )?;
+    } else if let Some(capture) = snapshot.latest_capture().filter(|c| c.state == "failed") {
+        writeln!(
+            out,
+            "  capture  failed: {}",
+            capture.error.as_deref().unwrap_or("no reason recorded")
+        )?;
     }
-    if let Some(page) = &snapshot.detections {
-        writeln!(out, "  detects  {} total", page.total)?;
+    if let Some(sweep) = snapshot.running_sweep() {
+        writeln!(out, "  sweep    running on {} (radio busy)", sweep.band)?;
+    }
+
+    match &snapshot.tracks {
+        Some(page) => {
+            writeln!(out, "  tracks   {} live", page.total)?;
+            for track in &page.tracks {
+                let identity = track
+                    .identity
+                    .as_ref()
+                    .map(|i| i.label())
+                    .unwrap_or_else(|| "unknown".to_string());
+                writeln!(
+                    out,
+                    "    {:<10} {:.2}  {:<20} {}x  {}{}",
+                    track.state,
+                    track.confidence,
+                    identity,
+                    track.detection_count,
+                    track.evidence_classes(),
+                    // Corroborating-only evidence is consistent with an
+                    // aircraft without being one. Saying so is the whole
+                    // difference between a Remote ID contact and a
+                    // DJI-branded access point.
+                    if track.identified() {
+                        ""
+                    } else {
+                        "  (not identified)"
+                    }
+                )?;
+            }
+        }
+        None => writeln!(out, "  tracks   unavailable")?,
+    }
+
+    match &snapshot.detections {
+        Some(page) => {
+            writeln!(out, "  detects  {} total", page.total)?;
+            for detection in &page.detections {
+                let rf = detection.rf.clone().unwrap_or_default();
+                writeln!(
+                    out,
+                    "    {:<5} {:<15} {:<7} {:<6} {}",
+                    detection.sensor_kind,
+                    class_label(&detection.detection_class),
+                    rf.rssi_dbm
+                        .map(|r| format!("{r:.0}dBm"))
+                        .unwrap_or_default(),
+                    rf.tuning().unwrap_or_default(),
+                    detection.label()
+                )?;
+            }
+        }
+        None => writeln!(out, "  detects  unavailable")?,
     }
     Ok(())
+}
+
+/// `A Remote ID`, or a bare letter for a class this build has never heard of.
+///
+/// The letter always survives. It is what the API actually said, and a label
+/// this binary is too old to know is not a reason to print nothing.
+fn class_label(code: &str) -> String {
+    match detection_class_label(code) {
+        "" => code.to_string(),
+        label => format!("{code} {label}"),
+    }
 }
 
 #[cfg(test)]

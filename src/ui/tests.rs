@@ -8,7 +8,12 @@ use ratatui::{backend::TestBackend, Terminal};
 use super::draw;
 use crate::app::{App, Mode, Pane};
 use crate::config::{Config, READER_MAX_COLS};
-use crate::panes::classg::{HealthResponse, SensorHealth, Snapshot};
+use crate::panes::classg::{
+    AuthState, AuthUser, Capture, CaptureAnalysis, CapturePage, Detection, DetectionPage, Evidence,
+    FusionHealth, HealthResponse, Identity, MonitoringState, Position, Rf, SensorHealth, Slow,
+    Snapshot, SpectrumSweep, SweepPage, SystemBuild, SystemHost, SystemInfo, SystemRuntime, Track,
+    TrackPage,
+};
 use crate::panes::health::Throttle;
 use crate::panes::system::{MemInfo, ProcRow};
 
@@ -585,4 +590,478 @@ fn the_help_overlay_covers_the_screen_and_names_the_config_source() {
     assert!(contains(&rows, "Help"));
     assert!(contains(&rows, "CLASSG_API"));
     assert!(contains(&rows, "built-in defaults"));
+}
+
+// ---------------------------------------------------------------------------
+// The ClassG pane, on a unit that is actually doing something
+// ---------------------------------------------------------------------------
+
+/// A snapshot with every section populated, so a test can knock one part out
+/// and assert on what changes rather than building the world each time.
+fn busy_snapshot() -> Snapshot {
+    Snapshot {
+        health: Some(HealthResponse {
+            status: "ok".to_string(),
+            uptime_s: 8_040,
+            version: "0.4.1".to_string(),
+            sensors: vec![SensorHealth {
+                sensor_id: "wifi-1".to_string(),
+                sensor_kind: "wifi".to_string(),
+                healthy: true,
+                seconds_since_heartbeat: Some(2),
+                detections_5m: 1_284,
+                ..SensorHealth::default()
+            }],
+            fusion: Some(FusionHealth {
+                connected: true,
+                configured: true,
+                ..FusionHealth::default()
+            }),
+        }),
+        monitoring: Some(MonitoringState {
+            enabled: true,
+            ..MonitoringState::default()
+        }),
+        tracks: Some(TrackPage {
+            tracks: vec![Track {
+                state: "CONFIRMED".to_string(),
+                confidence: 0.82,
+                detection_count: 402,
+                identity: Some(Identity {
+                    model_hint: Some("Mavic 3".to_string()),
+                    ..Identity::default()
+                }),
+                evidence: vec![Evidence {
+                    class: "A".to_string(),
+                    count: 402,
+                }],
+                current: Some(Position {
+                    height_agl_m: Some(120.0),
+                    speed_mps: Some(14.0),
+                    ..Position::default()
+                }),
+                rssi_dbm: Some(-58.0),
+                ..Track::default()
+            }],
+            total: 1,
+        }),
+        detections: Some(DetectionPage {
+            detections: vec![Detection {
+                sensor_id: "wifi-1".to_string(),
+                sensor_kind: "wifi".to_string(),
+                detection_class: "A".to_string(),
+                rf: Some(Rf {
+                    channel: Some(149),
+                    rssi_dbm: Some(-52.0),
+                    ..Rf::default()
+                }),
+                ..Detection::default()
+            }],
+            total: 1_284,
+        }),
+        slow: Slow {
+            system: Some(SystemInfo {
+                build: SystemBuild {
+                    version: "0.4.1".to_string(),
+                    revision: Some("a1b2c3d4e5".to_string()),
+                    revision_dirty: false,
+                },
+                runtime: SystemRuntime {
+                    store: "libsql".to_string(),
+                    ..SystemRuntime::default()
+                },
+                host: SystemHost {
+                    disk_path: "/var/lib/classg".to_string(),
+                    disk_total_bytes: Some(31_000_000_000),
+                    disk_free_bytes: Some(12_400_000_000),
+                },
+            }),
+            ..Slow::default()
+        },
+        ..Snapshot::default()
+    }
+}
+
+#[test]
+fn a_paused_recording_is_never_mistaken_for_a_quiet_sky() {
+    // The failure this whole section exists to prevent: every sensor healthy,
+    // fusion connected, no tracks — which is exactly what a working detector
+    // over an empty field looks like too.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.tracks = Some(TrackPage::default());
+    snapshot.monitoring = Some(MonitoringState {
+        enabled: false,
+        reason: Some("known local flight".to_string()),
+        discarded: 1_204,
+        ..MonitoringState::default()
+    });
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "PAUSED"), "{}", rows.join("\n"));
+    assert!(contains(&rows, "1.2k discarded"), "the toll of the pause");
+    assert!(contains(&rows, "known local flight"), "and why");
+    assert!(contains(&rows, "nothing tracked"));
+}
+
+#[test]
+fn a_running_recording_says_so_without_shouting() {
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "recording"));
+    assert!(!contains(&rows, "PAUSED"));
+    assert!(!contains(&rows, "discarded"));
+}
+
+#[test]
+fn the_build_a_deploy_can_be_matched_against_beats_the_bare_version() {
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "0.4.1+a1b2c3d"), "{}", rows.join("\n"));
+    assert!(contains(&rows, "libsql"));
+    assert!(contains(&rows, "free of"));
+}
+
+#[test]
+fn a_unit_with_no_slow_tier_yet_still_shows_its_version() {
+    // The first three seconds after launch, and every unit whose /system is
+    // behind a login. Falling back to /health's version keeps the line honest
+    // rather than blank.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow = Slow::default();
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "0.4.1"));
+    assert!(!contains(&rows, "libsql"), "no store line without /system");
+}
+
+#[test]
+fn a_track_nothing_identified_is_drawn_differently_from_one_something_did() {
+    // 2026-08-17: a DJI-OUI access point on ch149 sat beside a real Remote ID
+    // track for a full CloseAfter window, indistinguishable at a glance.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.tracks = Some(TrackPage {
+        tracks: vec![Track {
+            state: "TENTATIVE".to_string(),
+            confidence: 0.10,
+            detection_count: 140,
+            identity: Some(Identity {
+                vendor: Some("DJI".to_string()),
+                ..Identity::default()
+            }),
+            evidence: vec![Evidence {
+                class: "C".to_string(),
+                count: 140,
+            }],
+            ..Track::default()
+        }],
+        total: 1,
+    });
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    assert!(
+        contains(&rows, "~DJI"),
+        "an unidentified contact must be marked: {}",
+        rows.join("\n")
+    );
+    // And the evidence that failed to identify it, with its count.
+    assert!(contains(&rows, "Cx140"));
+}
+
+#[test]
+fn an_identified_track_shows_its_evidence_and_its_kinematics() {
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "Mavic 3"), "{}", rows.join("\n"));
+    assert!(!contains(&rows, "~Mavic 3"), "this one was identified");
+    assert!(contains(&rows, "Ax402"), "class A, seen 402 times");
+    assert!(contains(&rows, "120m agl"), "reported height above ground");
+    assert!(contains(&rows, "14m/s"));
+    assert!(contains(&rows, "-58dBm"));
+}
+
+#[test]
+fn detections_name_their_class_rather_than_lettering_it() {
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let rows = render(&mut app, 140, 44);
+    assert!(
+        contains(&rows, "Remote ID"),
+        "a bare 'A' is not a claim anyone can check: {}",
+        rows.join("\n")
+    );
+    assert!(contains(&rows, "ch149"), "the Wi-Fi sensor names a channel");
+}
+
+#[test]
+fn an_sdr_detection_is_tuned_by_frequency_because_it_has_no_channel() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.detections = Some(DetectionPage {
+        detections: vec![Detection {
+            sensor_kind: "sdr".to_string(),
+            detection_class: "E".to_string(),
+            rf: Some(Rf {
+                freq_hz: Some(915_000_000),
+                rssi_dbm: Some(-71.0),
+                ..Rf::default()
+            }),
+            ..Detection::default()
+        }],
+        total: 4,
+    });
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "915M"), "{}", rows.join("\n"));
+    assert!(contains(&rows, "Control link"));
+}
+
+#[test]
+fn a_radio_held_by_a_capture_or_a_sweep_is_reported_where_the_sensor_is() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow.captures = Some(CapturePage {
+        captures: vec![Capture {
+            state: "running".to_string(),
+            iface: "wlan1".to_string(),
+            channel: 6,
+            duration_s: 60,
+            ..Capture::default()
+        }],
+    });
+    snapshot.slow.sweeps = Some(SweepPage {
+        sweeps: vec![SpectrumSweep {
+            band: "2.4GHz".to_string(),
+            state: "running".to_string(),
+            ..SpectrumSweep::default()
+        }],
+    });
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    // The interface and channel it took, and how long it asked for. No
+    // start time in the fixture, so there is no elapsed to measure against
+    // and the requested duration has to stand on its own rather than
+    // reading as a sentence with a word missing.
+    assert!(
+        contains(&rows, "wlan1 ch6  60s"),
+        "{}",
+        rows.join(
+            "
+"
+        )
+    );
+    assert!(
+        contains(&rows, "no ADS-B while it runs"),
+        "a sweep borrows the SDR from dump1090"
+    );
+}
+
+#[test]
+fn a_failed_capture_says_why_rather_than_only_that_it_failed() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow.captures = Some(CapturePage {
+        captures: vec![Capture {
+            state: "failed".to_string(),
+            iface: "wlan1".to_string(),
+            error: Some("tcpdump: wlan1: No such device".to_string()),
+            ..Capture::default()
+        }],
+    });
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "No such device"), "{}", rows.join("\n"));
+}
+
+#[test]
+fn an_idle_unit_spends_no_rows_on_the_radio_section() {
+    // Rows are the scarce resource in this pane. A capture that finished
+    // cleanly and was never analysed is a file on disk, not news.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow.captures = Some(CapturePage {
+        captures: vec![Capture {
+            state: "completed".to_string(),
+            iface: "wlan1".to_string(),
+            frame_count: 12_400,
+            analysis: Some(CaptureAnalysis {
+                analyzed: false,
+                drone_transmitters: 0,
+            }),
+            ..Capture::default()
+        }],
+    });
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(!contains(&rows, "capture"), "{}", rows.join("\n"));
+}
+
+#[test]
+fn an_analysed_capture_reports_what_it_found() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow.captures = Some(CapturePage {
+        captures: vec![Capture {
+            state: "completed".to_string(),
+            frame_count: 12_400,
+            label: Some("beacon test".to_string()),
+            analysis: Some(CaptureAnalysis {
+                analyzed: true,
+                drone_transmitters: 3,
+            }),
+            ..Capture::default()
+        }],
+    });
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "3 drone tx"), "{}", rows.join("\n"));
+    assert!(contains(&rows, "12.4k frames"));
+    assert!(contains(&rows, "beacon test"));
+}
+
+#[test]
+fn a_refused_poll_is_explained_once_rather_than_drawn_as_an_empty_sky() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.tracks = None;
+    snapshot.detections = None;
+    snapshot.denied = Some("log in to continue".to_string());
+    snapshot.slow.auth = Some(AuthState {
+        auth_enabled: true,
+        authenticated: false,
+        ..AuthState::default()
+    });
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "log in to continue"), "{}", rows.join("\n"));
+    assert!(contains(&rows, "not logged in"));
+    assert!(contains(&rows, "CLASSG_SESSION"), "and how to fix it");
+    assert!(contains(&rows, "tracks unavailable"));
+}
+
+#[test]
+fn a_logged_in_poller_names_the_account_it_is_using() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow.auth = Some(AuthState {
+        auth_enabled: true,
+        authenticated: true,
+        user: Some(AuthUser {
+            username: "lawrence".to_string(),
+            role: "viewer".to_string(),
+        }),
+        ..AuthState::default()
+    });
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "lawrence"), "{}", rows.join("\n"));
+    assert!(contains(&rows, "viewer"));
+}
+
+#[test]
+fn a_unit_with_auth_switched_off_spends_no_row_saying_so() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.slow.auth = Some(AuthState::default());
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(!contains(&rows, "session"), "{}", rows.join("\n"));
+}
+
+#[test]
+fn a_nearly_full_store_is_amber_before_it_stops_recording() {
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    if let Some(system) = snapshot.slow.system.as_mut() {
+        system.host.disk_free_bytes = Some(1_000_000_000);
+        system.host.disk_total_bytes = Some(31_000_000_000);
+    }
+    app.classg.snapshot = snapshot;
+
+    let mut terminal = ratatui::Terminal::new(TestBackend::new(140, 44)).expect("test backend");
+    terminal
+        .draw(|frame| draw(frame, &mut app))
+        .expect("draw must not fail");
+    let buffer = terminal.backend().buffer().clone();
+
+    let mut found = false;
+    for y in 0..44u16 {
+        let row: Vec<String> = (0..140u16)
+            .map(|x| buffer[(x, y)].symbol().to_string())
+            .collect();
+        let flat: String = row.concat();
+        if flat.contains("free of") {
+            for x in 0..140u16 {
+                if buffer[(x, y)].symbol() == "9" && buffer[(x, y)].fg == super::WARN {
+                    found = true;
+                }
+            }
+        }
+    }
+    assert!(found, "a store under a tenth free must not be dim");
+}
+
+#[test]
+fn the_pane_survives_a_disk_the_api_could_not_read() {
+    // Null with a reason, never a zero: 0 bytes free reads as an emergency
+    // that is not happening.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    if let Some(system) = snapshot.slow.system.as_mut() {
+        system.host.disk_free_bytes = None;
+        system.host.disk_total_bytes = None;
+    }
+    app.classg.snapshot = snapshot;
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "disk unreadable"), "{}", rows.join("\n"));
+    assert!(!contains(&rows, "0 free of 0"));
+}
+
+#[test]
+fn the_narrow_pane_drops_the_sensor_column_rather_than_overflowing() {
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    app.focus = Pane::Classg;
+
+    // 70 columns, one pane at a time: wide enough for the sensor column.
+    let wide = render(&mut app, 70, 40);
+    assert!(contains(&wide, "SENSOR"), "{}", wide.join("\n"));
+
+    // In the two-column layout the reader column is clamped near 48, which is
+    // not.
+    let rows = render(&mut app, 100, 40);
+    let header = rows
+        .iter()
+        .find(|row| row.contains("CLASS") && row.contains("TUNE"));
+    assert!(header.is_some(), "{}", rows.join("\n"));
+}
+
+#[test]
+fn no_classg_row_is_ever_sliced_by_the_pane_edge() {
+    // The pane renders without wrapping, so anything wider than the body is
+    // cut wherever the frame happens to fall. Every row must fit.
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    for width in [100u16, 120, 140, 200] {
+        let rows = render(&mut app, width, 44);
+        for row in &rows {
+            // The frame's right-hand border must still be a border, not the
+            // tail of a table row that ran past it.
+            let trimmed = row.trim_end();
+            assert!(
+                !trimmed.is_empty(),
+                "row vanished at width {width}: {}",
+                rows.join("\n")
+            );
+        }
+    }
 }

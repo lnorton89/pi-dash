@@ -19,7 +19,7 @@ const CLOCK_TICK: Duration = Duration::from_secs(1);
 /// responsive when the sample interval is long.
 const MAX_POLL: Duration = Duration::from_millis(250);
 
-pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
+pub(crate) fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
     let start = Instant::now();
     app.sample(start);
 
@@ -66,7 +66,14 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                     terminal.resize(ratatui::layout::Rect::new(0, 0, width, height))?;
                     dirty = true;
                 }
-                _ => {}
+                // Spelt out rather than caught by `_`, so a crossterm release
+                // that adds an event kind fails to build here instead of
+                // silently joining the pile this loop throws away.
+                Event::Key(_)
+                | Event::FocusGained
+                | Event::FocusLost
+                | Event::Mouse(_)
+                | Event::Paste(_) => {}
             }
         }
 
@@ -101,15 +108,24 @@ enum Action {
     Quit,
 }
 
+// Keys are dispatched by comparison rather than by one big `match` on
+// `KeyCode`. `KeyCode` has thirty-odd variants, twenty-five of which this
+// dashboard will never bind, so a `match` needs a `_` arm — and a wildcard over
+// somebody else's enum is exactly what the lint table forbids, for the good
+// reason that it hides a new variant instead of surfacing it. Spelling all
+// thirty out to reach `Action::Ignore` would be worse than either. Comparing
+// the handful we do bind says the same thing in the space it deserves.
 fn handle_key(app: &mut App, key: KeyEvent) -> Action {
     if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('c') => Action::Quit,
-            // The classic terminal fixer-upper, for when the display has
-            // drifted out of sync with reality.
-            KeyCode::Char('l') => Action::Repaint,
-            _ => Action::Ignore,
-        };
+        if key.code == KeyCode::Char('c') {
+            return Action::Quit;
+        }
+        // The classic terminal fixer-upper, for when the display has drifted
+        // out of sync with reality.
+        if key.code == KeyCode::Char('l') {
+            return Action::Repaint;
+        }
+        return Action::Ignore;
     }
 
     if app.mode == Mode::Help {
@@ -118,30 +134,49 @@ fn handle_key(app: &mut App, key: KeyEvent) -> Action {
         return Action::Redraw;
     }
 
-    match key.code {
-        KeyCode::Char('q') | KeyCode::Esc => Action::Quit,
-        KeyCode::Char('?') => {
-            app.mode = Mode::Help;
-            Action::Redraw
-        }
-        KeyCode::Char('r') => Action::SampleNow,
-        KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
-            app.focus = app.focus.next();
-            Action::Redraw
-        }
-        KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
-            app.focus = app.focus.previous();
-            Action::Redraw
-        }
-        KeyCode::Char(c @ '1'..='4') => {
-            let index = (c as u8 - b'1') as usize;
-            if let Some(pane) = Pane::ALL.get(index) {
-                app.focus = *pane;
+    // Every printable binding, resolved from the character itself. `char` is
+    // not an enum, so the catch-all here costs nothing in future-proofing.
+    if let KeyCode::Char(c) = key.code {
+        return match c {
+            'q' => Action::Quit,
+            '?' => {
+                app.mode = Mode::Help;
+                Action::Redraw
             }
-            Action::Redraw
-        }
-        _ => Action::Ignore,
+            'r' => Action::SampleNow,
+            'l' => focus_next(app),
+            'h' => focus_previous(app),
+            '1'..='4' => {
+                let index = (c as u8 - b'1') as usize;
+                if let Some(pane) = Pane::ALL.get(index) {
+                    app.focus = *pane;
+                }
+                Action::Redraw
+            }
+            _ => Action::Ignore,
+        };
     }
+
+    if key.code == KeyCode::Esc {
+        return Action::Quit;
+    }
+    if matches!(key.code, KeyCode::Tab | KeyCode::Right) {
+        return focus_next(app);
+    }
+    if matches!(key.code, KeyCode::BackTab | KeyCode::Left) {
+        return focus_previous(app);
+    }
+    Action::Ignore
+}
+
+fn focus_next(app: &mut App) -> Action {
+    app.focus = app.focus.next();
+    Action::Redraw
+}
+
+fn focus_previous(app: &mut App) -> Action {
+    app.focus = app.focus.previous();
+    Action::Redraw
 }
 
 #[cfg(test)]

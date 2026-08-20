@@ -1,0 +1,5 @@
+# The repository is LF throughout and is built on a Raspberry Pi. rustfmt
+# otherwise defaults to the *native* newline style, so a `cargo fmt` run from
+# the Windows side of this project rewrites every file it touches to CRLF and
+# turns a three-line change into a whole-file diff.
+newline_style = "Unix"

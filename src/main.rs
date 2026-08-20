@@ -7,7 +7,9 @@
 //!   system   CPU, memory and the busiest processes, straight from /proc
 //!   health   temperature, core voltage, ARM clock, and the throttle bits
 //!   radios   per-interface throughput, monitor-mode state, USB radio presence
-//!   classg   GET /api/v1/health and /tracks, degraded rather than fatal
+//!   classg   whether the detector is recording and what it can hear,
+//!            from /health, /monitoring, /system, /tracks and /detections —
+//!            degraded rather than fatal
 //!
 //! It is a rewrite of `classg/scripts/pi-dash.sh`, which orchestrated tmux
 //! around a btop pane and three Bash readers. Everything is rendered by this
@@ -17,7 +19,24 @@
 //! or CAP_NET_ADMIN to say anything useful, none of them ship on a stock Pi
 //! OS, and the numbers they would add are not the numbers that break this box.
 //!
-//! Set CLASSG_API if the API is not on the default port.
+//! Set CLASSG_API if the API is not on the default port, and CLASSG_SESSION
+//! if that API has authentication switched on — only /health and /auth/me are
+//! public, and without a session the pane can show sensor state and nothing
+//! else. It says so rather than drawing an empty track list.
+
+// Tests assert by panicking: `expect` on a value a fixture just constructed is
+// how a failed assertion reports itself, and `unwrap_used`/`expect_used` are
+// denied crate-wide precisely so that never happens in the code that runs on
+// the Pi. The expectation is scoped to `cfg(test)`, so the ordinary build of
+// this binary — the one that ships — is still checked strictly.
+#![cfg_attr(
+    test,
+    expect(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "a test asserts by panicking; the shipped binary is still checked"
+    )
+)]
 
 mod app;
 mod config;
@@ -39,7 +58,7 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 use app::App;
-use config::{load_config, CliOverrides};
+use config::{load_config, CliOverrides, Config};
 use run::run_app;
 
 #[derive(Parser, Debug)]
@@ -80,21 +99,7 @@ fn main() -> Result<()> {
     .context("failed to load configuration")?;
 
     if cli.print_config {
-        println!(
-            "config    {}",
-            config
-                .source
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "built-in defaults".to_string())
-        );
-        println!("api       {}", config.api);
-        println!("interval  {:.2}s", config.interval.as_secs_f64());
-        println!("api poll  {:.2}s", config.api_interval.as_secs_f64());
-        println!("theme     {}", config.theme);
-        println!("glyphs    {}", config.glyphs);
-        println!("usb ids   {}", config.usb_vendor_ids.join(", "));
-        println!("ignore    {}", config.ignore_interfaces.join(", "));
+        print_config(&config);
         return Ok(());
     }
 
@@ -113,6 +118,71 @@ fn main() -> Result<()> {
     // Report after the terminal is back, so the message is not swallowed by
     // the alternate screen being torn down under it.
     result
+}
+
+/// The resolved settings, and which tier of the precedence chain set each one.
+///
+/// The provenance column is the point. "api http://127.0.0.1:8081" does not
+/// help somebody whose dashboard is talking to the wrong box; "(environment)"
+/// next to it points straight at the `CLASSG_API` still exported in their
+/// shell, which no amount of reading the config file would have revealed.
+fn print_config(config: &Config) {
+    println!(
+        "config    {}",
+        config
+            .source
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "none found".to_string())
+    );
+
+    // The key the origin map is keyed by is not always the label worth
+    // printing: `api_interval` is a field name, `api poll` is what it does.
+    let row = |label: &str, key: &str, value: String| {
+        println!("{label:<10}{value:<42}({})", config.origins.of(key).label());
+    };
+    row("api", "api", config.api.clone());
+    row(
+        "interval",
+        "interval",
+        format!("{:.2}s", config.interval.as_secs_f64()),
+    );
+    row(
+        "api poll",
+        "api_interval",
+        format!("{:.2}s", config.api_interval.as_secs_f64()),
+    );
+    row("theme", "theme", config.theme.clone());
+    row("glyphs", "glyphs", config.glyphs.clone());
+    row(
+        "processes",
+        "processes",
+        config
+            .processes
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "fill the pane".to_string()),
+    );
+    // Never the token itself. This is the one command somebody pastes into an
+    // issue when the dashboard will not talk to their API, and a session
+    // cookie in that paste is a live credential for the whole unit.
+    row(
+        "session",
+        "session",
+        match &config.session {
+            Some(_) => "set".to_string(),
+            None => "not set".to_string(),
+        },
+    );
+    row(
+        "usb ids",
+        "usb_vendor_ids",
+        config.usb_vendor_ids.join(", "),
+    );
+    row(
+        "ignore",
+        "ignore_interfaces",
+        config.ignore_interfaces.join(", "),
+    );
 }
 
 fn enter_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {

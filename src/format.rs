@@ -11,7 +11,7 @@
 //! eye reads as the display glitching.
 
 /// `1.2 MB/s`. Used where there is room for the full unit.
-pub fn human_rate(bytes_per_sec: f64) -> String {
+pub(crate) fn human_rate(bytes_per_sec: f64) -> String {
     let b = bytes_per_sec.max(0.0);
     if b < 1024.0 {
         format!("{:.0} B/s", b)
@@ -24,7 +24,7 @@ pub fn human_rate(bytes_per_sec: f64) -> String {
 
 /// `1.2M`. Used for the per-interface rx/tx columns, where two of these plus
 /// the interface name and mode already fill the pane.
-pub fn human_rate_compact(bytes_per_sec: f64) -> String {
+pub(crate) fn human_rate_compact(bytes_per_sec: f64) -> String {
     let b = bytes_per_sec.max(0.0);
     if b < 1024.0 {
         format!("{:.0}B", b)
@@ -36,7 +36,7 @@ pub fn human_rate_compact(bytes_per_sec: f64) -> String {
 }
 
 /// kB in (the unit /proc/meminfo and `df -k` both use), `1.2G` out.
-pub fn human_kb(kb: u64) -> String {
+pub(crate) fn human_kb(kb: u64) -> String {
     // "0K" reads as a rounded-down small number; plain "0" reads as nothing,
     // which is what it is. Swap on a fresh boot is the case that matters.
     if kb == 0 {
@@ -53,7 +53,7 @@ pub fn human_kb(kb: u64) -> String {
 }
 
 /// `12s` / `4m` / `2h` / `3d` — the age of something, at one significant unit.
-pub fn short_age(secs: i64) -> String {
+pub(crate) fn short_age(secs: i64) -> String {
     if secs < 0 {
         // Clock skew between this box and whatever stamped the record. Say so
         // rather than printing a negative age that looks like a parse bug.
@@ -69,7 +69,7 @@ pub fn short_age(secs: i64) -> String {
 
 /// `2d3h41m` — how long the box has been up, always all three units so the
 /// field never changes width mid-watch.
-pub fn uptime(secs: u64) -> String {
+pub(crate) fn uptime(secs: u64) -> String {
     format!(
         "{}d{}h{}m",
         secs / 86400,
@@ -79,7 +79,7 @@ pub fn uptime(secs: u64) -> String {
 }
 
 /// `1h 5m` / `12m` — a service uptime, where days are rare and seconds noise.
-pub fn coarse_uptime(secs: u64) -> String {
+pub(crate) fn coarse_uptime(secs: u64) -> String {
     if secs >= 3600 {
         format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
     } else {
@@ -87,9 +87,31 @@ pub fn coarse_uptime(secs: u64) -> String {
     }
 }
 
+/// `12.4G` from a raw byte count. `/system` reports disk in bytes where
+/// `/proc/meminfo` and `df -k` report kilobytes, so this is the byte-scaled
+/// twin of [`human_kb`] rather than a second spelling of it.
+pub(crate) fn human_bytes(bytes: u64) -> String {
+    human_kb(bytes / 1024)
+}
+
+/// `402` / `1.2k` / `3.4M` — a count in a column four characters wide.
+///
+/// Detection counts run to five and six figures on a busy afternoon, and a
+/// column that grows two characters when one track crosses 100 000 reflows
+/// everything to its right.
+pub(crate) fn compact_count(n: u64) -> String {
+    if n < 1000 {
+        return n.to_string();
+    }
+    if n < 1_000_000 {
+        return format!("{:.1}k", n as f64 / 1000.0);
+    }
+    format!("{:.1}M", n as f64 / 1_000_000.0)
+}
+
 /// Truncates to `max` *characters* (not bytes) so a non-ASCII device string
 /// out of `lsusb` can never split a UTF-8 sequence or overrun the pane.
-pub fn clip(s: &str, max: usize) -> String {
+pub(crate) fn clip(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {
@@ -143,6 +165,25 @@ mod tests {
         assert_eq!(uptime(90_061), "1d1h1m");
         assert_eq!(coarse_uptime(59), "0m");
         assert_eq!(coarse_uptime(3_900), "1h 5m");
+    }
+
+    #[test]
+    fn bytes_scale_the_same_way_kilobytes_do() {
+        assert_eq!(human_bytes(0), "0");
+        assert_eq!(human_bytes(12_400_000_000), "11.5G");
+        // Under a kilobyte rounds to zero rather than inventing a unit: the
+        // only caller is a disk figure, where it never happens.
+        assert_eq!(human_bytes(512), "0");
+    }
+
+    #[test]
+    fn counts_stay_four_characters_wide() {
+        assert_eq!(compact_count(0), "0");
+        assert_eq!(compact_count(402), "402");
+        assert_eq!(compact_count(999), "999");
+        assert_eq!(compact_count(1_000), "1.0k");
+        assert_eq!(compact_count(12_400), "12.4k");
+        assert_eq!(compact_count(2_500_000), "2.5M");
     }
 
     #[test]

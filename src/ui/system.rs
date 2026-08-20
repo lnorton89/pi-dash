@@ -54,7 +54,7 @@ const GRAPH_MIN_ROWS: usize = 3;
 /// table answers the wrong question.
 const PROC_ROWS_RESERVED: usize = 5;
 
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let system = &app.system;
     let glyphs = app.glyphs;
 
@@ -375,20 +375,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 
 /// How the CPU block lays itself out for a given pane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CpuLayout {
+pub(crate) struct CpuLayout {
     /// Graph beside the core column (btop's shape) rather than above a grid.
-    pub side_by_side: bool,
+    pub(crate) side_by_side: bool,
     /// Rows the graph gets. Zero means no graph — there was not room for one
     /// worth looking at.
-    pub rows: usize,
+    pub(crate) rows: usize,
     /// Cells of graph, in the side-by-side layout.
-    pub graph_width: usize,
+    pub(crate) graph_width: usize,
     /// Width of each per-core meter.
-    pub core_meter: usize,
+    pub(crate) core_meter: usize,
     /// Cells of sparkline beside each core meter. Zero drops them.
-    pub core_spark: usize,
+    pub(crate) core_spark: usize,
     /// Cores per row, in the stacked fallback.
-    pub per_row: usize,
+    pub(crate) per_row: usize,
 }
 
 /// Columns the core column spends on things that are not its meter:
@@ -408,7 +408,7 @@ const GRAPH_MIN_WIDTH: usize = 30;
 /// the graph. Sixteen cores in a vertical list is 18 rows of CPU before the
 /// memory meters start, which is not a summary any more — those fall back to
 /// the grid.
-pub fn cpu_layout(width: usize, height: usize, cores: usize) -> CpuLayout {
+pub(crate) fn cpu_layout(width: usize, height: usize, cores: usize) -> CpuLayout {
     let available = width.saturating_sub(2);
     let column = CORE_LABEL + CORE_METER_MAX + CORE_TAIL + CORE_SPARK + 2;
     // cpu + one row per core + load.
@@ -557,12 +557,12 @@ fn core_row<'a>(
 
 /// Widths for the process table's flexible columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProcColumns {
-    pub name: usize,
+pub(crate) struct ProcColumns {
+    pub(crate) name: usize,
     /// Zero on a pane too narrow to carry a command line as well as a name.
-    pub cmdline: usize,
+    pub(crate) cmdline: usize,
     /// Zero on a pane too narrow for the per-process meter.
-    pub bar: usize,
+    pub(crate) bar: usize,
 }
 
 /// Lays out the process table.

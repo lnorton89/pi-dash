@@ -26,3 +26,29 @@ ureq = { version = "2.12", default-features = false }
 # The Pi builds this itself; a monitoring tool is not worth a long LTO link.
 lto = "thin"
 strip = true
+
+[lints.rust]
+warnings = "deny"
+dead_code = "deny"
+non_snake_case = "deny"
+non_upper_case_globals = "deny"
+non_camel_case_types = "deny"
+unused_variables = "deny"
+unused_imports = "forbid"
+unused_must_use = "forbid"
+unreachable_patterns = "forbid"
+unreachable_pub = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+wildcard_enum_match_arm = "deny"
+match_wildcard_for_single_variants = "deny"
+match_wild_err_arm = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+ignored_unit_patterns = "deny"
+allow_attributes = "deny"

@@ -24,7 +24,7 @@ use super::DIM;
 
 /// Which characters meters, graphs and borders are drawn with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Glyphs {
+pub(crate) enum Glyphs {
     /// Block and braille drawing characters — the btop look.
     #[default]
     Unicode,
@@ -40,7 +40,7 @@ pub enum Glyphs {
 }
 
 impl Glyphs {
-    pub fn parse(name: &str) -> Glyphs {
+    pub(crate) fn parse(name: &str) -> Glyphs {
         match name.trim().to_ascii_lowercase().as_str() {
             "ascii" | "plain" => Glyphs::Ascii,
             // Unknown values fall back rather than failing to start, the same
@@ -49,7 +49,7 @@ impl Glyphs {
         }
     }
 
-    pub fn border_set(self) -> border::Set {
+    pub(crate) fn border_set(self) -> border::Set {
         match self {
             Glyphs::Unicode => border::PLAIN,
             Glyphs::Ascii => ASCII_BORDER,
@@ -115,7 +115,7 @@ const ASCII_BORDER: border::Set = border::Set {
 
 /// How many colours the terminal can be trusted with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Depth {
+pub(crate) enum Depth {
     /// The sixteen ANSI colours, which is all the Linux framebuffer console
     /// has. The ramp is coarse but the hue progression still reads.
     Ansi16,
@@ -128,7 +128,7 @@ pub enum Depth {
 /// Decides the depth from the two variables that carry the answer. Split out
 /// from the environment lookup so it can be tested without setting
 /// process-wide state under a threaded test runner.
-pub fn detect_depth(term: Option<&str>, colorterm: Option<&str>) -> Depth {
+pub(crate) fn detect_depth(term: Option<&str>, colorterm: Option<&str>) -> Depth {
     // COLORTERM is only set by terminals that mean it, and anything claiming
     // truecolor certainly has the 256-colour cube underneath.
     if colorterm.is_some_and(|c| !c.trim().is_empty()) {
@@ -153,7 +153,7 @@ fn depth() -> Depth {
 
 /// What a full bar *means*, which is not the same question as how full it is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Ramp {
+pub(crate) enum Ramp {
     /// Green → amber → red. Anything where more is worse.
     #[default]
     Load,
@@ -172,7 +172,7 @@ pub enum Ramp {
 /// 24-cell meter rendered as a solid grey block that out-shouted the short
 /// green fill in front of it — the eye went to the part that carried no
 /// information.
-pub fn track() -> Color {
+pub(crate) fn track() -> Color {
     match depth() {
         Depth::Cube256 => Color::Indexed(236),
         // The 16-colour console has nothing between black and DarkGray, so the
@@ -183,7 +183,7 @@ pub fn track() -> Color {
 
 /// Background for every other process row, or `None` where the palette has no
 /// shade dark enough to stripe with without becoming a highlight.
-pub fn row_shade() -> Option<Color> {
+pub(crate) fn row_shade() -> Option<Color> {
     match depth() {
         Depth::Cube256 => Some(Color::Indexed(234)),
         Depth::Ansi16 => None,
@@ -191,11 +191,11 @@ pub fn row_shade() -> Option<Color> {
 }
 
 /// The colour at `t` along `ramp`. Out of range clamps.
-pub fn ramp(ramp: Ramp, t: f64) -> Color {
+pub(crate) fn ramp(ramp: Ramp, t: f64) -> Color {
     ramp_at(depth(), ramp, t)
 }
 
-pub fn ramp_at(depth: Depth, ramp: Ramp, t: f64) -> Color {
+pub(crate) fn ramp_at(depth: Depth, ramp: Ramp, t: f64) -> Color {
     let t = if t.is_finite() {
         t.clamp(0.0, 1.0)
     } else {
@@ -312,7 +312,7 @@ impl<'a> Runs<'a> {
 }
 
 /// A horizontal meter, gradient-filled, exactly `width` cells wide.
-pub fn bar<'a>(frac: f64, width: usize, glyphs: Glyphs, role: Ramp) -> Vec<Span<'a>> {
+pub(crate) fn bar<'a>(frac: f64, width: usize, glyphs: Glyphs, role: Ramp) -> Vec<Span<'a>> {
     if width == 0 {
         return Vec::new();
     }
@@ -376,7 +376,7 @@ const BRAILLE_RIGHT: [u8; 4] = [3, 4, 5, 7];
 /// is what the first cut did, turns the pane into graph paper — six rows of
 /// dots at every level, with the one row of real data lost inside them. Only
 /// the bottom row keeps a floor, so an idle graph is still visibly a graph.
-pub fn area_graph<'a>(
+pub(crate) fn area_graph<'a>(
     samples: &[f64],
     width: usize,
     rows: usize,
@@ -474,7 +474,12 @@ pub fn area_graph<'a>(
 /// per-core column exists to answer. Colour follows each column's own value
 /// rather than its height, because in a one-row graph height carries no
 /// information to follow.
-pub fn sparkline<'a>(samples: &[f64], width: usize, glyphs: Glyphs, role: Ramp) -> Vec<Span<'a>> {
+pub(crate) fn sparkline<'a>(
+    samples: &[f64],
+    width: usize,
+    glyphs: Glyphs,
+    role: Ramp,
+) -> Vec<Span<'a>> {
     if width == 0 {
         return Vec::new();
     }

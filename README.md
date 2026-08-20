@@ -24,9 +24,26 @@ you, plus a system summary so you do not need one.
 │  902     dockerd                                206M     1.4 ▏░░░░░░░░░ ││  0bda:2838  Realtek RTL2838 (RTL-SDR V4)          │
 │  61      kworker/1:2-events                        0     0.4 ▏░░░░░░░░░ │└───────────────────────────────────────────────────┘
 │                                                                         │┌ ClassG  127.0.0.1:8081 ───────────────────────────┐
-│                                                                         ││  ok   up 75h 25m   0.4.1                          │
+│                                                                         ││  ok   up 75h 25m   0.4.1+a1b2c3d                  │
+│                                                                         ││  store     libsql       11.5G free of 28.9G       │
+│                                                                         ││  recording on                                     │
+│                                                                         ││                                                   │
 │                                                                         ││  sensors                                          │
-│                                                                         ││   wifi-1     wifi ok      1s 5m:12                │
+│                                                                         ││   SENSOR     KIND  STATE  BEAT   5MIN             │
+│                                                                         ││   wifi-1     wifi  ok       1s     12             │
+│                                                                         ││   sdr-1      sdr   DOWN      -      0             │
+│                                                                         ││     rtl_sdr: device not found                     │
+│                                                                         ││                                                   │
+│                                                                         ││  fusion    connected   last message 2s            │
+│                                                                         ││                                                   │
+│                                                                         ││  tracks 1 live                                    │
+│                                                                         ││   STATE     CONF IDENTITY    EVID   DET SEEN      │
+│                                                                         ││   CONFIRMED 0.82 Mavic 3     Ax402  402   3s      │
+│                                                                         ││     120m agl  14m/s  -58dBm  held 4m              │
+│                                                                         ││                                                   │
+│                                                                         ││  detections 1284 total                            │
+│                                                                         ││   TIME     CLASS          dBm  TUNE  ID           │
+│                                                                         ││   14:32:08 Remote ID      -52 ch149  Mavic 3      │
 └─────────────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────┘
                                                  q quit · r refresh now · ? help
 ```
@@ -58,7 +75,40 @@ which is also what makes the binary runnable on a dev machine that is not a Pi.
 | **system** | CPU history graph beside per-core meters and sparklines, memory and reclaimable cache, swap, load, task counts, and the busiest processes with their command lines, from `/proc/stat`, `/proc/meminfo`, `/proc/<pid>/stat` |
 | **health** | temperature, core voltage, ARM clock, **decoded throttle bits**, disk, I/O |
 | **radios** | per-interface throughput from `/proc/net/dev`, monitor-mode state, USB radio presence |
-| **classg** | `GET /api/v1/health`, `/tracks`, `/detections` — degraded, never fatal |
+| **classg** | whether the unit is recording, which sensors are alive, what is holding a radio, and what is in the sky — degraded, never fatal |
+
+### What the ClassG pane is actually for
+
+An empty track list is the most ambiguous thing this dashboard can draw. It
+means a quiet sky, or a paused recording, or a dead fusion link, or a session
+that expired, or a sweep that took the radio thirty seconds ago — and the
+consequences of confusing those are not symmetric. A detector that has stopped
+detecting silently manufactures false confidence, which is worse than one that
+is visibly offline (ClassG ADR-0003).
+
+So everything above the track list is there to remove one way of misreading it:
+
+| Line | From | Removes the reading |
+|---|---|---|
+| `recording PAUSED, 1.2k discarded` | `/monitoring` | ingestion is gated; sensors and fusion look perfectly healthy while nothing is recorded |
+| `store libsql  1.0G free of 28.9G` | `/system` | the filesystem detections land on is filling, and it is not the one the health pane measures |
+| sensor `DOWN` with its reason | `/health` | a radio that never came up, versus one that stopped |
+| `fusion down` | `/health` | every sensor heartbeating into a track pipeline that is dead |
+| `capture running wlan1 ch6` | `/captures` | the Wi-Fi sensor is quiet because something took its monitor interface |
+| `sweep running 2.4GHz` | `/spectrum/sweeps` | ADS-B is quiet because a sweep borrowed the SDR from dump1090 (ADR-0008) |
+| `refused: log in to continue` | `/auth/me` | the lists are empty because the API declined, not because the sky is |
+
+Two details in the track and detection lists are also deliberate rather than
+decorative:
+
+- **A class is named, not lettered.** `Remote ID` and `Control link`, not `A`
+  and `E`. A letter is only a claim if you have memorised `data-model.md`.
+- **A contact nothing identified is marked `~` and dimmed.** Classes C, D and
+  H corroborate an identification but never make one — an OUI names whoever
+  built the radio, not what is flying it. This mirrors `corroboratingOnlyClasses`
+  in `services/fusion/track.go`. Without it a DJI-branded access point sits in
+  the list looking exactly like a real Remote ID contact, which is a mistake
+  that has actually been made.
 
 ### Why the system pane looks like btop
 
@@ -150,6 +200,21 @@ pi-dash --print-config  # resolved settings and where they came from
 cron, or from a CI step. It takes two samples ~0.7 s apart, because every rate
 here is a difference between two readings.
 
+`--print-config` prints each resolved value with the tier that set it:
+
+```
+config    /home/pi/.config/pi-dash/pi-dash.toml
+api       http://pi.local:9000                      (environment)
+interval  2.00s                                     (config file)
+api poll  3.00s                                     (config file)
+session   set                                       (environment)
+```
+
+The right-hand column is the point — a dashboard pointed at the wrong box is
+almost always a `CLASSG_API` still exported in the shell it was launched from,
+and no amount of reading the config file reveals that. `session` reports only
+whether one is configured, never its value.
+
 ## Configuration
 
 Precedence: **env > file > defaults**.
@@ -158,9 +223,29 @@ Precedence: **env > file > defaults**.
 |---|---|
 | `CLASSG_API` | `http://127.0.0.1:8081` |
 | `CLASSG_DASH_INTERVAL` | `2` (seconds; fractional accepted) |
+| `CLASSG_SESSION` | unset |
 
 File-only settings worth knowing about: `theme` (accent colour), `processes`
-(rows of process table), and `glyphs` (`unicode` or `ascii`, above).
+(rows of process table), `api_interval_secs`, and `glyphs` (`unicode` or
+`ascii`, above).
+
+### If the API has authentication switched on
+
+Only `/health` and `/auth/me` are public. Everything else — tracks, detections,
+the recording switch, the build string — needs a viewer session, and without one
+the pane shows sensor state, says the API refused it, and points at this:
+
+```sh
+CLASSG_SESSION=<value of the classg_session cookie> pi-dash
+```
+
+That is a token, not a password. pi-dash never logs in and holds nothing that
+could mint a session; copy the cookie from a browser that is already signed in.
+It can also go in the config file as `session`, but the environment is the
+better place for a live credential.
+
+Most units have authentication off and need none of this, which is why a pane
+with no session still draws — degraded, and saying so.
 
 See [`pi-dash.toml`](pi-dash.toml) for the file form. It is searched next to
 the binary, in the working directory, then `~/.config/pi-dash/pi-dash.toml`;

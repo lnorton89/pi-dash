@@ -22,13 +22,13 @@ use crate::panes::health::{
 /// before its content exists, and because a pane whose height changed with
 /// its contents would shove the two panes under it around every time the
 /// supply sagged.
-pub const CONTENT_ROWS: u16 = 8;
+pub(crate) const CONTENT_ROWS: u16 = 8;
 
 /// The column every row right-aligns its value into, before its meter. Wide
 /// enough for `0.850V`, `117.0G` and a four-digit clock.
 const VALUE_W: usize = 6;
 
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let block = pane_block(" Pi health ", app.accent, app.glyphs);
     let inner = block.inner(area);
     frame.render_widget(block, area);
