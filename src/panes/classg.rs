@@ -579,16 +579,18 @@ impl Rf {
     /// `ch6` for something the Wi-Fi sensor names by channel, `915M` for
     /// something the SDR only knows by frequency. One column, because a pane
     /// this narrow cannot afford two and no detection ever fills both.
+    ///
+    /// Always megahertz, never a rounded `1.1G`. Every band this system cares
+    /// about above a gigahertz is four digits of megahertz -- 1090 for ADS-B,
+    /// 1200 and 1300 for analog FPV -- and one decimal place of gigahertz maps
+    /// 1090 and 1150 onto the same string. `1090M` is also what anyone working
+    /// on the radio would say out loud. Four digits plus the unit still fits
+    /// the column, and nothing here reaches ten gigahertz.
     pub(crate) fn tuning(&self) -> Option<String> {
         if let Some(channel) = self.channel {
             return Some(format!("ch{channel}"));
         }
-        let hz = self.freq_hz? as f64;
-        if hz >= 1e9 {
-            Some(format!("{:.1}G", hz / 1e9))
-        } else {
-            Some(format!("{:.0}M", hz / 1e6))
-        }
+        Some(format!("{:.0}M", self.freq_hz? as f64 / 1e6))
     }
 }
 
@@ -1323,12 +1325,30 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(ism.tuning().as_deref(), Some("915M"));
-        let fpv = Rf {
-            freq_hz: Some(1_280_000_000),
-            ..Default::default()
-        };
-        assert_eq!(fpv.tuning().as_deref(), Some("1.3G"));
         assert_eq!(Rf::default().tuning(), None);
+    }
+
+    #[test]
+    fn the_bands_above_a_gigahertz_stay_told_apart() {
+        // A single decimal place of gigahertz put ADS-B at 1.1G and analog FPV
+        // at 1.2G, and mapped 1090 and 1150 onto the same string. These are
+        // four digits of megahertz and they stay that way.
+        let tuning = |hz: i64| {
+            Rf {
+                freq_hz: Some(hz),
+                ..Default::default()
+            }
+            .tuning()
+        };
+        assert_eq!(tuning(1_090_000_000).as_deref(), Some("1090M"));
+        assert_eq!(tuning(1_200_000_000).as_deref(), Some("1200M"));
+        assert_eq!(tuning(1_300_000_000).as_deref(), Some("1300M"));
+        assert_eq!(tuning(5_745_000_000).as_deref(), Some("5745M"));
+        // Five characters, which is what the TUNE column was built for.
+        for hz in [433_000_000, 1_090_000_000, 5_745_000_000] {
+            let text = tuning(hz).expect("a frequency");
+            assert!(text.len() <= 5, "{text} will not fit the column");
+        }
     }
 
     #[test]

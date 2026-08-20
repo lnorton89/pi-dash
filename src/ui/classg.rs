@@ -27,8 +27,8 @@ use super::{pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
 use crate::app::App;
 use crate::format::{clip, coarse_uptime, compact_count, human_bytes, short_age};
 use crate::panes::classg::{
-    detection_class_label, Capture, DetectionPage, FlexTime, HealthResponse, Snapshot,
-    SpectrumSweep, Track, TrackPage,
+    detection_class_label, Capture, Detection, DetectionPage, FlexTime, HealthResponse, Snapshot,
+    SpectrumSweep, Track, TrackPage, MAX_ROWS,
 };
 
 /// Below this the detections table drops its SENSOR column. On a unit with one
@@ -97,11 +97,19 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
         ));
     }
 
-    // Ask for exactly what will fit next time. This pane is handed the slack
-    // left over from the two fixed-height ones, so on a tall terminal that is
-    // a real list rather than the first three rows of one.
-    app.classg
-        .set_hints(track_room.max(1), detection_room.max(1));
+    // Ask for what will fit next time. This pane is handed the slack left over
+    // from the two fixed-height ones, so on a tall terminal that is a real
+    // list rather than the first three rows of one.
+    //
+    // Detections ask for double, because consecutive repeats of one contact
+    // are folded into a single row before they are drawn: requesting exactly
+    // the number of rows available would leave the bottom half of the list
+    // empty on precisely the unit where it matters, the one with an aeroplane
+    // overhead. Capped at MAX_ROWS, and it is a loopback request either way.
+    app.classg.set_hints(
+        track_room.max(1),
+        detection_room.saturating_mul(2).clamp(1, MAX_ROWS),
+    );
 
     frame.render_widget(Paragraph::new(lines), inner);
 }
@@ -191,7 +199,12 @@ fn status_lines<'a>(snapshot: &Snapshot, health: &HealthResponse, width: usize) 
         if system.runtime.turso_sync_configured {
             detail.push_str(" · sync");
         }
-        let detail = format!("{detail:<12}");
+        // Two spaces after the pad, not a pad alone. `{:<12}` adds nothing
+        // once the text is already twelve wide, and on a unit that is
+        // containerised AND syncing the detail reads
+        // "libsql · docker · sync" -- which ran straight into the figure
+        // after it as `sync88.3G free of 117.0G`.
+        let detail = format!("{:<10}  ", detail);
         let mut used = GUTTER + 1 + detail.chars().count();
         let mut spans = vec![Span::raw(detail)];
         match (system.host.disk_free_bytes, system.host.disk_total_bytes) {
@@ -756,7 +769,10 @@ fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) 
     ));
     lines.push(table_header(header));
 
-    for detection in page.detections.iter().take(room.saturating_sub(1)) {
+    for (detection, run) in collapse(&page.detections)
+        .into_iter()
+        .take(room.saturating_sub(1))
+    {
         let rf = detection.rf.clone().unwrap_or_default();
         let (rssi_text, rssi_color) = match rf.rssi_dbm {
             // Thresholds are the same ones the radios pane uses for a link, so
@@ -791,14 +807,60 @@ fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) 
         // One column for two things no detection ever fills both of: the
         // Wi-Fi sensor names a channel, the SDR knows only a frequency.
         spans.push(dim(format!("{:>6}  ", rf.tuning().unwrap_or_default())));
-        spans.push(Span::raw(clip(&detection.label(), label_w)));
+        // The count is clipped last and never clipped away. Appending it and
+        // then trimming the whole string to the column turned `x16` into `x1`
+        // on any identity long enough to push it over -- a wrong number rather
+        // than a shortened one, which is the failure this pane exists to avoid.
+        let label = detection.label();
+        spans.push(Span::raw(match run {
+            0 | 1 => clip(&label, label_w),
+            n => {
+                let count = format!(" x{n}");
+                let room = label_w.saturating_sub(count.chars().count());
+                format!("{}{count}", clip(&label, room))
+            }
+        }));
         lines.push(Line::from(spans));
     }
     lines
 }
 
+/// Folds a run of consecutive detections that all say the same thing into one
+/// row, with how many there were.
+///
+/// On a unit with an SDR this is the difference between a usable list and an
+/// unusable one. ADS-B squitters at roughly 1 Hz per aircraft, so a single
+/// aeroplane overhead fills every row in the pane: measured on the real unit,
+/// sixteen consecutive rows were one ICAO repeating, and the Wi-Fi detections
+/// underneath them had been pushed off the bottom. `N172SP x16` is the same
+/// fact in one row.
+///
+/// Only runs that share an identity are folded. Two anonymous class E bursts
+/// at the same frequency are not known to be the same transmitter, and the
+/// pane must not claim they were -- an unidentified signal repeating is a
+/// thing worth looking at on its own.
+fn collapse(detections: &[Detection]) -> Vec<(&Detection, usize)> {
+    let mut rows: Vec<(&Detection, usize)> = Vec::new();
+    for detection in detections {
+        let label = detection.label();
+        if !label.is_empty() {
+            if let Some((previous, run)) = rows.last_mut() {
+                if previous.sensor_id == detection.sensor_id
+                    && previous.detection_class == detection.detection_class
+                    && previous.label() == label
+                {
+                    *run += 1;
+                    continue;
+                }
+            }
+        }
+        rows.push((detection, 1));
+    }
+    rows
+}
+
 /// `wifi-1` where the record names its sensor, the bare kind where it does not.
-fn sensor_of(detection: &crate::panes::classg::Detection) -> &str {
+fn sensor_of(detection: &Detection) -> &str {
     if detection.sensor_id.is_empty() {
         &detection.sensor_kind
     } else {

@@ -9,10 +9,10 @@ use super::draw;
 use crate::app::{App, Mode, Pane};
 use crate::config::{Config, READER_MAX_COLS};
 use crate::panes::classg::{
-    AuthState, AuthUser, Capture, CaptureAnalysis, CapturePage, Detection, DetectionPage, Evidence,
-    FusionHealth, HealthResponse, Identity, MonitoringState, Position, Rf, SensorHealth, Slow,
-    Snapshot, SpectrumSweep, SweepPage, SystemBuild, SystemHost, SystemInfo, SystemRuntime, Track,
-    TrackPage,
+    Adsb, AuthState, AuthUser, Capture, CaptureAnalysis, CapturePage, Detection, DetectionPage,
+    Evidence, FusionHealth, HealthResponse, Identity, MonitoringState, Position, Rf, SensorHealth,
+    Slow, Snapshot, SpectrumSweep, SweepPage, SystemBuild, SystemHost, SystemInfo, SystemRuntime,
+    Track, TrackPage,
 };
 use crate::panes::health::Throttle;
 use crate::panes::system::{MemInfo, ProcRow};
@@ -411,6 +411,9 @@ fn every_health_meter_starts_at_the_same_column() {
     app.health.disk = Some(DiskUsage {
         used_kb: 31_775_129,
         total_kb: 122_683_392,
+        // Not total - used: the 5% ext4 holds back for root is neither used
+        // nor available to anything this box runs.
+        avail_kb: 84_774_400,
     });
     app.health.io = IoRates::default();
     app.focus = Pane::Health;
@@ -1064,4 +1067,147 @@ fn no_classg_row_is_ever_sliced_by_the_pane_edge() {
             );
         }
     }
+}
+
+#[test]
+fn one_aeroplane_overhead_does_not_fill_the_whole_detection_list() {
+    // Measured on the real unit: ADS-B squitters at roughly 1 Hz per aircraft,
+    // so sixteen consecutive rows were a single ICAO repeating and the Wi-Fi
+    // detections underneath had been pushed off the bottom of the pane.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    let mut detections: Vec<Detection> = (0..16)
+        .map(|_| Detection {
+            sensor_id: "sdr-0".to_string(),
+            sensor_kind: "sdr".to_string(),
+            detection_class: "D".to_string(),
+            rf: Some(Rf {
+                freq_hz: Some(1_090_000_000),
+                ..Rf::default()
+            }),
+            adsb: Some(Adsb {
+                icao: "a9d770".to_string(),
+                callsign: None,
+            }),
+            ..Detection::default()
+        })
+        .collect();
+    // The one row that actually matters, underneath all of them.
+    detections.push(Detection {
+        sensor_id: "wifi-1".to_string(),
+        sensor_kind: "wifi".to_string(),
+        detection_class: "A".to_string(),
+        rf: Some(Rf {
+            channel: Some(6),
+            rssi_dbm: Some(-52.0),
+            ..Rf::default()
+        }),
+        identity: Some(Identity {
+            model_hint: Some("Mavic 3".to_string()),
+            ..Identity::default()
+        }),
+        ..Detection::default()
+    });
+    snapshot.detections = Some(DetectionPage {
+        detections,
+        total: 15370,
+    });
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "a9d770 x16"), "{}", rows.join("\n"));
+    assert!(
+        contains(&rows, "Mavic 3"),
+        "the folded repeats must leave room for the row that matters"
+    );
+    // And the heading still reports the true total, not the folded count.
+    assert!(contains(&rows, "15370 total"));
+}
+
+#[test]
+fn anonymous_repeats_are_left_alone() {
+    // Two class E bursts with no identity are not known to be the same
+    // transmitter, and an unidentified signal repeating is worth looking at.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.detections = Some(DetectionPage {
+        detections: (0..3)
+            .map(|_| Detection {
+                sensor_id: "sdr-0".to_string(),
+                sensor_kind: "sdr".to_string(),
+                detection_class: "E".to_string(),
+                rf: Some(Rf {
+                    freq_hz: Some(915_000_000),
+                    rssi_dbm: Some(-71.0),
+                    ..Rf::default()
+                }),
+                ..Detection::default()
+            })
+            .collect(),
+        total: 3,
+    });
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    assert!(!contains(&rows, "x3"), "{}", rows.join("\n"));
+    let bursts = rows
+        .iter()
+        .filter(|row| row.contains("Control link"))
+        .count();
+    assert_eq!(bursts, 3, "all three must still be listed");
+}
+
+#[test]
+fn the_store_detail_never_runs_into_the_disk_figure() {
+    // A unit that is containerised AND syncing reads "libsql · docker · sync",
+    // which is wider than the column it was padded to -- so the pad added
+    // nothing and it rendered as `sync88.3G free of 117.0G`.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    if let Some(system) = snapshot.slow.system.as_mut() {
+        system.runtime.containerised = true;
+        system.runtime.turso_sync_configured = true;
+    }
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 140, 44);
+    assert!(contains(&rows, "sync  "), "{}", rows.join("\n"));
+    assert!(!contains(&rows, "sync11"), "no space before the figure");
+    assert!(!contains(&rows, "sync8"), "no space before the figure");
+}
+
+#[test]
+fn a_long_callsign_loses_characters_before_it_loses_its_count() {
+    // `KLM1234X x16` clipped as one string became `KLM1234X x1`, which is a
+    // wrong number rather than a shortened name.
+    let mut app = test_app();
+    let mut snapshot = busy_snapshot();
+    snapshot.detections = Some(DetectionPage {
+        detections: (0..16)
+            .map(|_| Detection {
+                sensor_id: "sdr-0".to_string(),
+                sensor_kind: "sdr".to_string(),
+                detection_class: "D".to_string(),
+                adsb: Some(Adsb {
+                    icao: "a9d770".to_string(),
+                    callsign: Some("KLM1234X".to_string()),
+                }),
+                ..Detection::default()
+            })
+            .collect(),
+        total: 16,
+    });
+    app.classg.snapshot = snapshot;
+
+    // Narrow enough that the identity column cannot hold name and count both.
+    let rows = render(&mut app, 100, 40);
+    assert!(
+        contains(&rows, "x16"),
+        "{}",
+        rows.join(
+            "
+"
+        )
+    );
+    assert!(!contains(&rows, "x1 "), "the count must not be truncated");
 }

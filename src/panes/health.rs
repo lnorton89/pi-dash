@@ -157,14 +157,33 @@ pub(crate) fn parse_thermal_millidegrees(text: &str) -> Option<f64> {
 pub(crate) struct DiskUsage {
     pub(crate) used_kb: u64,
     pub(crate) total_kb: u64,
+    /// What a normal user can actually write, straight from df's own
+    /// `Available` column.
+    ///
+    /// This is NOT `total - used`. ext4 reserves 5% of the filesystem for
+    /// root by default, so those two differ by gigabytes: on the Pi this was
+    /// found on, `total - used` claimed 94.2G while 88.3G was writable. The
+    /// dashboard sat next to ClassG's own figure, which comes from `statfs`
+    /// and had it right, and the disagreement is what gave it away.
+    ///
+    /// It matters here more than on most boxes. The thing that fills this
+    /// filesystem is a capture writing until it runs out, and 5% of a 117G
+    /// card is most of an hour of headroom that does not exist.
+    pub(crate) avail_kb: u64,
 }
 
 impl DiskUsage {
+    /// How full the filesystem is, defined the way `df` defines Capacity:
+    /// against what is usable, not against the raw size. Reporting
+    /// `used / total` put this pane a couple of points below what `df` on the
+    /// same box says, which is the sort of small disagreement that makes
+    /// somebody stop trusting the number.
     pub(crate) fn pct(&self) -> f64 {
-        if self.total_kb == 0 {
+        let usable = self.used_kb.saturating_add(self.avail_kb);
+        if usable == 0 {
             return 0.0;
         }
-        self.used_kb as f64 * 100.0 / self.total_kb as f64
+        self.used_kb as f64 * 100.0 / usable as f64
     }
 }
 
@@ -177,6 +196,7 @@ pub(crate) fn parse_df(text: &str) -> Option<DiskUsage> {
     Some(DiskUsage {
         total_kb: fields.get(1)?.parse().ok()?,
         used_kb: fields.get(2)?.parse().ok()?,
+        avail_kb: fields.get(3)?.parse().ok()?,
     })
 }
 
@@ -443,7 +463,22 @@ Filesystem     1024-blocks     Used Available Capacity Mounted on
         let disk = parse_df(text).expect("parsed");
         assert_eq!(disk.total_kb, 59_872_256);
         assert_eq!(disk.used_kb, 21_456_320);
-        assert!((disk.pct() - 35.83).abs() < 0.1, "got {}", disk.pct());
+        // Available, not total - used. Those differ by 2.9G here -- the 5%
+        // ext4 reserves for root, which a capture cannot write into.
+        assert_eq!(disk.avail_kb, 35_367_424);
+        assert_ne!(disk.avail_kb, disk.total_kb - disk.used_kb);
+        // And the percentage is df's Capacity column, 38%, not used/total,
+        // which would say 35.8% on the same line of output.
+        assert!((disk.pct() - 37.77).abs() < 0.1, "got {}", disk.pct());
+    }
+
+    #[test]
+    fn a_disk_df_could_not_measure_is_zero_percent_rather_than_a_divide() {
+        assert_eq!(DiskUsage::default().pct(), 0.0);
+        // Truncated output -- a df that printed no Available column must
+        // yield None rather than a plausible-looking figure built from the
+        // columns that did arrive.
+        assert!(parse_df("Filesystem 1024-blocks Used\n/dev/root 100 40\n").is_none());
     }
 
     #[test]

@@ -123,8 +123,12 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
         health
             .disk
             .map(|d| format!(
-                "{}/{} ({:.0}%)",
+                // Free is the number you act on, and it is df's Available --
+                // not total minus used, which counts the 5% ext4 holds back
+                // for root and nothing here can write into.
+                "{} used, {} free of {} ({:.0}%)",
                 human_kb(d.used_kb),
+                human_kb(d.avail_kb),
                 human_kb(d.total_kb),
                 d.pct()
             ))

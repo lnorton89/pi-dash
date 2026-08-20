@@ -170,7 +170,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
                     width,
                     format!(
                         "  {} free of {}",
-                        human_kb(disk.total_kb.saturating_sub(disk.used_kb)),
+                        human_kb(disk.avail_kb),
                         human_kb(disk.total_kb)
                     ),
                 );
