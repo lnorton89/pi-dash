@@ -199,12 +199,47 @@ made by giving btop its own tmux window.
 
 ```sh
 pi-dash --once          # one plain-text snapshot, no TTY needed
+pi-dash --check         # one verdict line, and an exit code to branch on
 pi-dash --print-config  # resolved settings and where they came from
 ```
 
-`--once` is how to check the readers against real hardware over SSH, from
-cron, or from a CI step. It takes two samples ~0.7 s apart, because every rate
-here is a difference between two readings.
+`--once` is how to check the readers against real hardware over SSH. It takes
+two samples ~0.7 s apart, because every rate here is a difference between two
+readings, and it always exits 0 — a snapshot's job is to render, and it
+rendered. For cron and CI, use `--check` below.
+
+`--check` is the monitoring half. One line, and an exit code:
+
+| Code | Means |
+|---|---|
+| `0` | ok |
+| `1` | degraded — working, but something here ends badly if left alone |
+| `2` | down — the API is unreachable, or says so itself |
+
+```
+$ pi-dash --check
+degraded: the API reports degraded; sensor sdr-1 is down (rtl_sdr: device not
+found); recording is paused (known local flight), 1204 detections discarded
+```
+
+It judges what the *dashboard* can see, not only what `/health` says: a
+perfectly healthy API on a Pi that is browning out, or 90% through its card, is
+a detector with a date on it. Specifically it fails on a paused recording, a
+non-optional sensor down, an API refusal, a live under-voltage or throttle, and
+a disk at 90%.
+
+Two things it deliberately does *not* fail on. Optional hardware that was never
+fitted — a Wi-Fi-only build has no SDR and must not fail for ever, or the check
+is one you turn off. And the sticky throttle register: a brownout at three in
+the morning is real history and belongs on the pane, but a probe that keeps
+failing because of it is a probe somebody silences.
+
+The line is always printed, so running it by hand says something. From cron,
+redirect stdout if you only want mail when something is wrong:
+
+```sh
+*/5 * * * * /usr/local/bin/pidash --check >/dev/null
+```
 
 `--print-config` prints each resolved value with the tier that set it:
 

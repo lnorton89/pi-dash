@@ -39,6 +39,7 @@
 )]
 
 mod app;
+mod check;
 mod config;
 mod format;
 mod localtoken;
@@ -79,16 +80,27 @@ struct Cli {
     interval: Option<f64>,
 
     /// Print one plain-text snapshot and exit. No terminal required, so this
-    /// is what to run over SSH, from cron, or from a health check.
+    /// is what to run over SSH when you want to read the whole picture.
+    /// Always exits 0: a snapshot's job is to render, and it rendered.
     #[arg(long)]
     once: bool,
+
+    /// Print one verdict line and exit 0 (ok), 1 (degraded) or 2 (down).
+    ///
+    /// The monitoring half of --once, for cron and CI. It judges what this
+    /// dashboard can see and not only what /health says, because a healthy API
+    /// on a Pi that is browning out or nearly out of disk is a detector with a
+    /// date on it. The line is always printed; redirect stdout if you only
+    /// want mail when something is wrong.
+    #[arg(long)]
+    check: bool,
 
     /// Print the resolved configuration and where each part came from.
     #[arg(long)]
     print_config: bool,
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<std::process::ExitCode> {
     let cli = Cli::parse();
     let config = load_config(
         cli.config,
@@ -101,14 +113,21 @@ fn main() -> Result<()> {
 
     if cli.print_config {
         print_config(&config);
-        return Ok(());
+        return Ok(std::process::ExitCode::SUCCESS);
+    }
+
+    if cli.check {
+        let mut stdout = io::stdout().lock();
+        let code = check::run(&config, &mut stdout)?;
+        stdout.flush()?;
+        return Ok(code);
     }
 
     if cli.once {
         let mut stdout = io::stdout().lock();
         snapshot::print_once(&config, &mut stdout)?;
         stdout.flush()?;
-        return Ok(());
+        return Ok(std::process::ExitCode::SUCCESS);
     }
 
     let app = App::new(config);
@@ -118,7 +137,7 @@ fn main() -> Result<()> {
 
     // Report after the terminal is back, so the message is not swallowed by
     // the alternate screen being torn down under it.
-    result
+    result.map(|()| std::process::ExitCode::SUCCESS)
 }
 
 /// The resolved settings, and which tier of the precedence chain set each one.

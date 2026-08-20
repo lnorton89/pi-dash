@@ -171,6 +171,19 @@ pub(crate) struct Config {
     pub(crate) origins: Origins,
 }
 
+impl Config {
+    /// The credential to talk to the API with, resolved from the two sources
+    /// in their documented precedence.
+    ///
+    /// Here rather than at each call site because there are three of them now
+    /// — the dashboard, `--once` and `--check` — and a fourth that forgot to
+    /// apply the precedence would be a build that silently authenticates as
+    /// somebody else.
+    pub(crate) fn credential(&self) -> Option<crate::panes::classg::Credential> {
+        crate::panes::classg::Credential::pick(self.session.clone(), self.local_token.clone())
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {

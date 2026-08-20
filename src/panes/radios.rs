@@ -252,6 +252,15 @@ impl RadiosPane {
         // installed, and the pane reads fine without a channel column.
         if self.sample_count.is_multiple_of(5) {
             self.refresh_channels();
+            // Re-apply what the refresh just learned. The rows above were
+            // built from the cache as it stood a moment ago, so without this
+            // every channel arrives one tick late — which on the very first
+            // sample means the column is empty for the first two seconds of
+            // every run, and after a hopper moves it means the pane shows the
+            // old channel once more before catching up.
+            for iface in self.ifaces.iter_mut() {
+                iface.channel = self.channel_cache.get(&iface.name).copied();
+            }
             self.usb_cache = read_usb_from_sysfs().unwrap_or_else(read_usb_from_lsusb);
         }
         self.usb = self
