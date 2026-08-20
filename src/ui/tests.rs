@@ -342,6 +342,8 @@ fn a_monitor_interface_reporting_unknown_is_not_drawn_as_a_fault() {
             state: "unknown".into(),
             rx_bps: 0.0,
             tx_bps: 0.0,
+            rx_total: 0,
+            tx_total: 0,
             mode: Some(WirelessMode::Monitor),
             channel: Some(6),
             driver: Some("mt7921u".into()),
@@ -351,6 +353,8 @@ fn a_monitor_interface_reporting_unknown_is_not_drawn_as_a_fault() {
             state: "down".into(),
             rx_bps: 0.0,
             tx_bps: 0.0,
+            rx_total: 0,
+            tx_total: 0,
             mode: None,
             channel: None,
             driver: Some("bcmgenet".into()),
@@ -457,6 +461,8 @@ fn every_table_on_screen_has_a_heading_over_it() {
         state: "unknown".into(),
         rx_bps: 3993.0,
         tx_bps: 0.0,
+        rx_total: 0,
+        tx_total: 0,
         mode: Some(crate::panes::radios::WirelessMode::Monitor),
         channel: Some(11),
         driver: Some("mt7921u".into()),
@@ -1298,6 +1304,8 @@ fn the_classg_pane_survives_a_radios_pane_that_wants_the_whole_column() {
             state: "up".into(),
             rx_bps: 0.0,
             tx_bps: 0.0,
+            rx_total: 0,
+            tx_total: 0,
             mode: Some(WirelessMode::Monitor),
             channel: Some(6),
             driver: Some("mt7921u".into()),
@@ -1533,4 +1541,107 @@ fn a_single_threaded_process_leaves_its_thread_column_blank() {
         .find(|r| r.contains("npm ci"))
         .expect("the row");
     assert!(!line.contains(" 1 "), "{line}");
+}
+
+/// Three interfaces as the Pi presents them: a wired one carrying traffic, a
+/// monitor radio that has heard something, and one that has heard nothing.
+fn with_interfaces(app: &mut App) {
+    use crate::panes::radios::{Iface, WirelessMode};
+    let ifc = |name: &str, rx: f64, tx: f64, rt: u64, tt: u64| Iface {
+        name: name.into(),
+        state: "up".into(),
+        rx_bps: rx,
+        tx_bps: tx,
+        rx_total: rt,
+        tx_total: tt,
+        mode: Some(WirelessMode::Monitor),
+        channel: Some(6),
+        driver: Some("mt7921u".into()),
+    };
+    app.radios.ifaces = vec![
+        ifc("wlan-tplink", 0.0, 0.0, 0, 0),
+        ifc("eth0", 7700.0, 8000.0, 677_000_000, 693_000_000),
+        ifc("wlan-alfa", 3900.0, 0.0, 12_400_000, 0),
+    ];
+    app.radios.throughput = (0..60).map(|i| ((i % 20) as f64) * 900.0).collect();
+}
+
+#[test]
+fn the_net_column_shows_a_total_as_well_as_a_rate() {
+    // `0B/s` on a monitor interface is what a quiet minute looks like and also
+    // what a radio that has never worked looks like. Only the total tells them
+    // apart, and the pane has never shown one.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+    let rows = render(&mut app, 210, 22);
+    let joined = rows.join("\n");
+
+    assert!(contains(&rows, "net"), "{joined}");
+    let eth = rows.iter().find(|r| r.contains("eth0")).expect("eth0");
+    assert!(eth.contains("7.5K"), "the rate: {eth}");
+    assert!(eth.contains("646M"), "the total since start: {eth}");
+
+    // The radio that has heard nothing says so with a zero total, not just a
+    // zero rate.
+    let quiet = rows
+        .iter()
+        .find(|r| r.contains("wlan-tpli"))
+        .expect("the quiet radio");
+    assert!(quiet.contains("0B"), "{quiet}");
+}
+
+#[test]
+fn the_net_column_puts_the_busiest_interface_first() {
+    // An interface that has moved nothing is the one you least need a row for,
+    // and there are only three rows.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+    let rows = render(&mut app, 210, 22);
+    let position = |needle: &str| {
+        rows.iter()
+            .position(|r| r.contains(needle))
+            .unwrap_or(usize::MAX)
+    };
+    assert!(position("eth0") < position("wlan-alfa"), "busiest first");
+    assert!(position("wlan-alfa") < position("wlan-tpli"));
+}
+
+#[test]
+fn the_band_drops_columns_from_the_right_as_the_pane_narrows() {
+    // Three columns, then two, then one -- each dropped rather than truncated,
+    // because half a row of figures is worse than none.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+
+    let wide = render(&mut app, 210, 22);
+    assert!(contains(&wide, "disks") && contains(&wide, "eth0"));
+
+    let middling = render(&mut app, 170, 22);
+    assert!(contains(&middling, "disks"), "disks outlive net");
+
+    let narrow = render(&mut app, 90, 22);
+    assert!(!contains(&narrow, "disks"));
+    assert!(contains(&narrow, "mem "), "memory always survives");
+}
+
+#[test]
+fn no_column_of_the_band_ever_overruns_the_pane() {
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 3);
+    with_interfaces(&mut app);
+    for width in [80u16, 104, 130, 170, 200, 210, 260] {
+        for row in render(&mut app, width, 22) {
+            assert!(
+                row.chars().count() <= width as usize,
+                "a row overran {width}: {row}"
+            );
+        }
+    }
 }

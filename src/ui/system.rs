@@ -21,7 +21,7 @@ use ratatui::{
 use super::gauge::{self, Glyphs, Ramp};
 use super::{field, header_style, pane_block, push_if_fits, threshold_color, DIM, GUTTER};
 use crate::app::App;
-use crate::format::{clip, human_kb, uptime};
+use crate::format::{clip, human_bytes, human_kb, human_rate_compact, uptime};
 use crate::panes::system::SystemPane;
 
 /// The aggregate CPU and memory meters size themselves to the pane, within
@@ -31,11 +31,17 @@ use crate::panes::system::SystemPane;
 const METER_MIN: usize = 12;
 const METER_MAX: usize = 24;
 
-/// Below this the disks column is dropped and memory keeps the whole width.
-/// Two half-width columns that can each hold a meter and a figure need this
-/// much between them; under it the disk rows arrive truncated, which is worse
-/// than absent.
-const MEM_AND_DISKS_COLS: usize = 104;
+/// Space between one column of the band and the next.
+const COLUMN_GAP: usize = 2;
+
+/// What a row of each column needs before it is worth placing at all: a name,
+/// a meter or a pair of rates, and the figures. Below these the column is
+/// dropped rather than truncated, because half a disk row is worse than none.
+const DISKS_MIN_W: usize = 43;
+const NET_MIN_W: usize = 40;
+
+/// Interfaces the net column will list before it stops.
+const NET_ROWS: usize = 3;
 
 /// Filesystems the disks column will list before it stops.
 ///
@@ -43,6 +49,27 @@ const MEM_AND_DISKS_COLS: usize = 104;
 /// when something is recording to a stick. Past that this is a process table
 /// with a disk list on top of it.
 const DISK_ROWS: usize = 3;
+
+/// The widest line in a column, in characters.
+///
+/// Characters and not bytes: the meters are three-byte block glyphs, and a
+/// byte count would place the next column two thirds of the way off the pane.
+fn column_width(lines: &[Line<'_>]) -> usize {
+    lines
+        .iter()
+        .map(|line| line.spans.iter().map(|s| s.content.chars().count()).sum())
+        .max()
+        .unwrap_or(0)
+}
+
+/// The same, for cells that have not become lines yet.
+fn cells_width(cells: &[Vec<Span<'_>>]) -> usize {
+    cells
+        .iter()
+        .map(|cell| cell.iter().map(|s| s.content.chars().count()).sum())
+        .max()
+        .unwrap_or(0)
+}
 
 /// Lays a second column of cells beside the first, starting at column `at`.
 ///
@@ -121,6 +148,72 @@ fn disk_column<'a>(
     }
     rows
 }
+
+/// The net column: a throughput trace, then a row per interface.
+///
+/// Rates AND totals, because they answer different questions and the pane has
+/// only ever answered the first. `0B/s` on a monitor interface is what a quiet
+/// minute looks like and also what a radio that has never worked looks like;
+/// the total since this dashboard started tells them apart.
+///
+/// Busiest first, since an interface that has moved nothing is the one you
+/// least need a row for.
+fn net_column<'a>(
+    radios: &crate::panes::radios::RadiosPane,
+    glyphs: gauge::Glyphs,
+    width: usize,
+) -> Vec<Vec<Span<'a>>> {
+    let spark = width.saturating_sub(NET_NAME_W + 6).clamp(0, 16);
+    let mut heading = vec![Span::styled("net", header_style())];
+    if spark > 0 {
+        heading.push(Span::raw(format!("{:<1$}", "", NET_NAME_W - 3)));
+        heading.extend(gauge::sparkline(
+            &radios.throughput,
+            spark,
+            glyphs,
+            Ramp::Cool,
+        ));
+    }
+    let mut rows = vec![heading];
+
+    let mut busiest: Vec<&crate::panes::radios::Iface> = radios.ifaces.iter().collect();
+    busiest.sort_by(|a, b| {
+        (b.rx_total + b.tx_total)
+            .cmp(&(a.rx_total + a.tx_total))
+            .then(a.name.cmp(&b.name))
+    });
+
+    for iface in busiest.into_iter().take(NET_ROWS) {
+        rows.push(vec![
+            Span::styled(
+                format!("{:<NET_NAME_W$}", clip(&iface.name, NET_NAME_W - 1)),
+                Style::default().fg(DIM),
+            ),
+            // `v` and `^` rather than the arrows btop draws: those live in the
+            // geometric-shapes block, which the framebuffer console renders as
+            // replacement characters.
+            Span::styled("v", Style::default().fg(DIM)),
+            Span::raw(format!("{:<7}", human_rate_compact(iface.rx_bps))),
+            Span::styled("^", Style::default().fg(DIM)),
+            Span::raw(format!("{:<8}", human_rate_compact(iface.tx_bps))),
+            // The totals, dim, because they are the slower question. Together
+            // they say whether this radio has ever passed anything, which no
+            // instantaneous rate can.
+            Span::styled(
+                format!(
+                    "{:>6}/{}",
+                    human_bytes(iface.rx_total),
+                    human_bytes(iface.tx_total)
+                ),
+                Style::default().fg(DIM),
+            ),
+        ]);
+    }
+    rows
+}
+
+/// Interface-name column. Wide enough for `wlan-tplink`.
+const NET_NAME_W: usize = 10;
 
 /// Mount-label column. Wide enough for `firmware`.
 const DISK_NAME_W: usize = 10;
@@ -411,16 +504,37 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // btop puts memory and disks side by side, and on a pane this wide the
     // room is there. Stacking them would push the process table down by a row
     // per filesystem to say something four columns could have said.
-    let memory = vec![mem_line, cache_line, swap_line];
-    if width >= MEM_AND_DISKS_COLS && !app.health.filesystems.is_empty() {
-        lines.extend(beside(
-            memory,
-            disk_column(&app.health.filesystems, glyphs, width / 2),
-            width / 2,
-        ));
-    } else {
-        lines.extend(memory);
+    // Each column is placed after the one before it has finished, rather than
+    // at a fixed fraction of the pane. The memory rows are wider than a third
+    // of it whenever the meter is, and splitting by thirds ran the disks
+    // heading straight into `1.2G reclaimable`.
+    let mut band = vec![mem_line, cache_line, swap_line];
+    let disks_at = column_width(&band) + COLUMN_GAP;
+    if !app.health.filesystems.is_empty() && disks_at + DISKS_MIN_W <= width {
+        // Half the remaining room when there is a net column to follow, all of
+        // it when there is not. The disks meter grows to whatever it is given,
+        // and left greedy it takes the space the third column needed.
+        let remaining = width - disks_at;
+        let budget = if app.radios.ifaces.is_empty() {
+            remaining
+        } else {
+            remaining / 2
+        };
+        let disks = disk_column(&app.health.filesystems, glyphs, budget);
+        let net_at = disks_at + cells_width(&disks) + COLUMN_GAP;
+        band = beside(band, disks, disks_at);
+
+        // A third column only where it can hold its figures whole. Two
+        // columns of numbers and one of truncation is worse than two columns.
+        if !app.radios.ifaces.is_empty() && net_at + NET_MIN_W <= width {
+            band = beside(
+                band,
+                net_column(&app.radios, glyphs, width - net_at),
+                net_at,
+            );
+        }
     }
+    lines.extend(band);
 
     // ── process table ──
     lines.push(Line::default());

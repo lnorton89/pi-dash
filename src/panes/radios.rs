@@ -94,6 +94,14 @@ pub(crate) struct Iface {
     /// `None` for a wired interface.
     pub(crate) mode: Option<WirelessMode>,
     pub(crate) channel: Option<u32>,
+    /// Bytes in and out since this dashboard started.
+    ///
+    /// Not since boot. The kernel's counters are since boot, but "677M today"
+    /// is not a question anybody asks a dashboard -- what you want to know is
+    /// whether the radio you are looking at has passed anything while you have
+    /// been watching it, which an instantaneous rate of 0B cannot tell you.
+    pub(crate) rx_total: u64,
+    pub(crate) tx_total: u64,
     /// Kernel module behind the interface — `mt7921u`, `brcmfmac`. This is
     /// the fact that tells two identical-looking `wlan*` entries apart, and
     /// the one you need when a monitor-mode capture is not producing frames:
@@ -179,6 +187,11 @@ fn read_usb_from_lsusb() -> Vec<UsbRadio> {
 #[derive(Debug, Default)]
 pub(crate) struct RadiosPane {
     prev: HashMap<String, IfaceCounters>,
+    /// The counter reading each interface was first seen at, so a total can be
+    /// "since pi-dash started" rather than "since the Pi booted".
+    baselines: HashMap<String, IfaceCounters>,
+    /// Aggregate throughput, oldest first, for the sparkline in the net box.
+    pub(crate) throughput: Vec<f64>,
     last_sample: Option<Instant>,
     sample_count: u64,
     usb_cache: Vec<UsbRadio>,
@@ -223,6 +236,14 @@ impl RadiosPane {
                 None => (0.0, 0.0),
             };
 
+            // An adapter that is re-plugged comes back with its counters at
+            // zero, which would make every total afterwards negative. Treat a
+            // counter that has gone backwards as a new interface and re-base
+            // on it: the totals restart, which is the truth about a radio that
+            // has just been re-enumerated.
+            let baseline = self.baselines.entry(name.clone()).or_insert(*current);
+            let (rx_total, tx_total) = total_since(baseline, current);
+
             let sys = std::path::Path::new("/sys/class/net").join(name);
             let state = read_trimmed(sys.join("operstate")).unwrap_or_else(|| "?".to_string());
             let wireless = sys.join("phy80211").exists() || sys.join("wireless").exists();
@@ -240,10 +261,30 @@ impl RadiosPane {
                 tx_bps,
                 mode,
                 channel: self.channel_cache.get(name).copied(),
+                rx_total,
+                tx_total,
                 driver: read_driver(&sys),
             });
         }
         self.prev = counters.into_iter().collect();
+
+        // One trace for every interface added together. Four sparklines in a
+        // column that has room for one would each be too short to have a
+        // shape, and what the box is being asked is whether this Pi is talking
+        // at all.
+        let moving: f64 = ifaces.iter().map(|i| i.rx_bps + i.tx_bps).sum();
+        if elapsed > Duration::ZERO {
+            if self.throughput.len() >= THROUGHPUT_HISTORY {
+                let excess = self.throughput.len() + 1 - THROUGHPUT_HISTORY;
+                self.throughput.drain(..excess);
+            }
+            self.throughput.push(moving);
+        }
+
+        // Interfaces that have gone take their baseline with them, so a USB
+        // adapter cycled a hundred times does not leave a hundred entries.
+        self.baselines
+            .retain(|name, _| self.prev.contains_key(name));
         self.ifaces = ifaces;
 
         // `iw` forks once per wireless interface and the channel only changes
@@ -297,6 +338,30 @@ impl RadiosPane {
         (table(self.ifaces.len()) + 2 + table(self.usb.len())) as u16
     }
 }
+
+/// Bytes in and out since the baseline, re-basing it if the counters have gone
+/// backwards.
+///
+/// An adapter that is re-plugged comes back with its counters at zero. Without
+/// this the totals would be a saturating subtraction against a baseline that
+/// no longer exists, which pins them at 0 for the life of the process -- a
+/// radio reporting it has never passed a byte while it is passing them.
+/// Restarting the count is the truth about a radio that has just been
+/// re-enumerated.
+pub(crate) fn total_since(baseline: &mut IfaceCounters, current: &IfaceCounters) -> (u64, u64) {
+    if current.rx_bytes < baseline.rx_bytes || current.tx_bytes < baseline.tx_bytes {
+        *baseline = *current;
+    }
+    (
+        current.rx_bytes.saturating_sub(baseline.rx_bytes),
+        current.tx_bytes.saturating_sub(baseline.tx_bytes),
+    )
+}
+
+/// Samples of aggregate throughput kept for the sparkline. At the default
+/// two-second cadence this is a couple of minutes, which is long enough to see
+/// a capture start and short enough to still be about now.
+const THROUGHPUT_HISTORY: usize = 60;
 
 /// Turns a counter delta into a throughput.
 ///
@@ -362,6 +427,49 @@ Inter-|   Receive                                                |  Transmit
         assert_eq!(parsed[0].1.tx_bytes, 0);
         assert!(parse_net_dev("").is_empty());
         assert!(parse_net_dev("no colon here\n").is_empty());
+    }
+
+    #[test]
+    fn totals_count_from_when_this_dashboard_started_not_from_boot() {
+        // The kernel's counters are since boot. "677M today" is not a question
+        // anybody asks a dashboard; whether this radio has passed anything
+        // while you have been watching it is.
+        let boot = IfaceCounters {
+            rx_bytes: 9_000_000,
+            tx_bytes: 4_000_000,
+        };
+        let mut baseline = boot;
+        assert_eq!(total_since(&mut baseline, &boot), (0, 0));
+
+        let later = IfaceCounters {
+            rx_bytes: 9_500_000,
+            tx_bytes: 4_250_000,
+        };
+        assert_eq!(total_since(&mut baseline, &later), (500_000, 250_000));
+    }
+
+    #[test]
+    fn a_replugged_adapter_restarts_its_total_rather_than_pinning_it_at_zero() {
+        // The counters come back at zero. Subtracting saturatingly against the
+        // old baseline would report 0 for the life of the process -- a radio
+        // insisting it has never passed a byte while it is passing them.
+        let mut baseline = IfaceCounters {
+            rx_bytes: 9_000_000,
+            tx_bytes: 4_000_000,
+        };
+        let fresh = IfaceCounters {
+            rx_bytes: 1_200,
+            tx_bytes: 0,
+        };
+        assert_eq!(total_since(&mut baseline, &fresh), (0, 0));
+        assert_eq!(baseline, fresh, "the baseline moved to the new counters");
+
+        // And it counts up again from there.
+        let after = IfaceCounters {
+            rx_bytes: 3_200,
+            tx_bytes: 500,
+        };
+        assert_eq!(total_since(&mut baseline, &after), (2_000, 500));
     }
 
     #[test]

@@ -133,8 +133,11 @@ row. Everything above the trace is blank, with a floor on the bottom row —
 a dim character at every level turns the pane into graph paper and loses the
 one row that carries the data.
 
-None of this is a btop reimplementation — no tree view, no process management,
-no disk or network boxes.
+It has grown towards btop rather than away from it: memory, disks and network
+sit in one band across the pane, and the process table carries threads, the
+owning account, a filter and a `12/374` count. What it still does not do is
+manage anything — no tree view, no renice, no kill. This is a dashboard for a
+box you are diagnosing over SSH, and every key on it is safe to press.
 
 #### On the Pi's own HDMI console
 
