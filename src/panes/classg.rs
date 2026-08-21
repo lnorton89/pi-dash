@@ -1755,7 +1755,28 @@ mod tests {
                 std::thread::spawn(move || {
                     while !worker_shutdown.load(Ordering::Relaxed) {
                         match listener.accept() {
-                            Ok((stream, _)) => serve(stream, routes, &worker_seen),
+                            Ok((stream, _)) => {
+                                // The LISTENER is non-blocking so the accept
+                                // loop can check the shutdown flag. On Windows
+                                // the accepted socket inherits that, and then
+                                // the first read returns WouldBlock whenever
+                                // the client's bytes have not landed yet --
+                                // which `serve` reads as a dead connection and
+                                // hangs up on, leaving the client with a
+                                // transport error instead of a response.
+                                //
+                                // That is a flake, not a failure: it needs the
+                                // machine to be busy enough that the request
+                                // arrives a moment after the accept. It showed
+                                // up exactly once, while a six-thousand-frame
+                                // render sweep was running beside it.
+                                let _ = stream.set_nonblocking(false);
+                                // And a timeout, so a client that connects and
+                                // says nothing cannot wedge this thread for
+                                // the length of the test run.
+                                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                                serve(stream, routes, &worker_seen);
+                            }
                             // Nothing waiting. Sleeping beats spinning a core
                             // for the length of the test suite.
                             Err(_) => std::thread::sleep(Duration::from_millis(2)),

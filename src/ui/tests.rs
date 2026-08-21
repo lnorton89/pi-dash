@@ -2103,3 +2103,104 @@ fn a_disk_figure_is_never_cut_off_mid_number() {
         }
     }
 }
+
+/// A dashboard with every pane carrying real content, for the sweeps.
+fn fully_loaded(app: &mut App) {
+    use crate::panes::system::ProcRow;
+    with_load(app);
+    with_filesystems(app, 1);
+    with_interfaces(app);
+    app.classg.snapshot = busy_snapshot();
+    app.system.total_procs = 203;
+    app.system.procs = (0..60)
+        .map(|i| ProcRow {
+            pid: 1000 + i,
+            name: format!("proc{i}"),
+            state: 'S',
+            cpu_pct: (60 - i) as f64 / 2.0,
+            rss_kb: 4000 * (60 - i) as u64,
+            threads: i as u64 % 20,
+            user: "admin".into(),
+            cmdline: format!("/usr/bin/proc{i} --serve"),
+        })
+        .collect();
+}
+
+/// Everything that must be true of a frame, whatever size it was drawn at.
+fn frame_invariants(rows: &[String], width: u16, height: u16) {
+    for row in rows {
+        assert!(
+            row.chars().count() <= width as usize,
+            "a row overran {width}x{height}: {row}"
+        );
+        // A replacement character means a glyph reached a terminal that cannot
+        // draw it, which is the whole failure `glyphs = "ascii"` exists for.
+        assert!(
+            !row.contains('\u{fffd}'),
+            "a replacement character at {width}x{height}: {row}"
+        );
+    }
+    // A pane that has been squeezed out of existence takes the thing it
+    // reports with it, silently. ClassG is the one this dashboard is for.
+    for title in ["1 System", "2 Pi health", "3 Radios", "4 ClassG"] {
+        assert!(
+            rows.iter().any(|r| r.contains(title)),
+            "{title} vanished at {width}x{height}"
+        );
+    }
+}
+
+#[test]
+fn every_width_the_wide_layout_covers_draws_a_whole_dashboard() {
+    // Swept one column at a time. The bugs this catches live in windows two or
+    // three characters wide -- a verdict clipped to `deg`, a column placed
+    // just past the edge -- and a sweep in steps of ten walks straight over
+    // them, which is how two of them shipped.
+    let mut app = test_app();
+    fully_loaded(&mut app);
+    for width in 100u16..=260 {
+        frame_invariants(&render(&mut app, width, 44), width, 44);
+    }
+}
+
+#[test]
+fn every_height_draws_a_whole_dashboard_too() {
+    // Heights are where panes get squeezed rather than truncated: the two
+    // fixed-height panes take theirs first and ClassG lives on what is left.
+    let mut app = test_app();
+    fully_loaded(&mut app);
+    for height in 12u16..=60 {
+        frame_invariants(&render(&mut app, 200, height), 200, height);
+    }
+}
+
+#[test]
+fn the_framebuffer_console_gets_a_whole_dashboard_at_every_width_too() {
+    // ascii mode is the mode that exists because a glyph came out wrong, so it
+    // is the one that most needs sweeping rather than spot-checking.
+    let mut app = App::new(Config {
+        api: "http://127.0.0.1:1".to_string(),
+        glyphs: "ascii".to_string(),
+        ..Config::default()
+    });
+    fully_loaded(&mut app);
+    for width in (100u16..=260).step_by(3) {
+        let rows = render(&mut app, width, 44);
+        frame_invariants(&rows, width, 44);
+        for row in &rows {
+            for ch in row.chars() {
+                assert!(
+                    !matches!(ch,
+                        '\u{2500}'..='\u{257F}'
+                        | '\u{2580}'..='\u{259F}'
+                        | '\u{25A0}'..='\u{25FF}'
+                        | '\u{2190}'..='\u{21FF}'
+                        | '\u{2800}'..='\u{28FF}'
+                    ),
+                    "U+{:04X} survived ascii mode at {width}: {row}",
+                    ch as u32
+                );
+            }
+        }
+    }
+}
