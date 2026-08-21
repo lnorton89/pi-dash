@@ -112,6 +112,27 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
 
     writeln!(out)?;
     writeln!(out, "health")?;
+    print_health(&health, out)?;
+
+    writeln!(out)?;
+    writeln!(out, "radios")?;
+    print_radios(&radios, out)?;
+
+    writeln!(out)?;
+    writeln!(out, "classg  {}", config.api)?;
+    // A one-shot has no previous slow tier to carry forward and no second
+    // chance to fetch one, so it always asks for the whole picture.
+    let client = Client::new(config.api.clone(), config.credential());
+    print_classg(&client.poll(5, 5, true, &Slow::default()), out)?;
+    Ok(())
+}
+
+/// The health section of `--once`.
+///
+/// Split out for the same reason print_classg was: it is the half of this
+/// file with decisions in it, and a function that takes a pane and returns
+/// text can be tested without a Pi under it.
+fn print_health(health: &HealthPane, out: &mut impl Write) -> Result<()> {
     writeln!(
         out,
         "  temp     {}",
@@ -134,23 +155,28 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
         }
     )?;
     writeln!(out, "  throttle {}", describe_throttle(health.throttle))?;
-    writeln!(
-        out,
-        "  disk     {}",
-        health
-            .disk
-            .map(|d| format!(
-                // Free is the number you act on, and it is df's Available --
-                // not total minus used, which counts the 5% ext4 holds back
-                // for root and nothing here can write into.
-                "{} used, {} free of {} ({:.0}%)",
-                human_kb(d.used_kb),
-                human_kb(d.avail_kb),
-                human_kb(d.total_kb),
-                d.pct()
-            ))
-            .unwrap_or_else(|| "unavailable".to_string())
-    )?;
+    // Every filesystem, as the pane lists them. Reporting `/` alone here while
+    // the dashboard shows three is the kind of difference that has somebody
+    // trusting the wrong one -- and on a unit recording to a stick, `/` is the
+    // disk least likely to be the one filling up.
+    //
+    // Free is the number you act on, and it is df's Available: not total minus
+    // used, which counts the 5% ext4 holds back for root and nothing here can
+    // write into.
+    if health.filesystems.is_empty() {
+        writeln!(out, "  disk     unavailable")?;
+    }
+    for fs in &health.filesystems {
+        writeln!(
+            out,
+            "  disk     {:<16} {} used, {} free of {} ({:.0}%)",
+            fs.mount,
+            human_kb(fs.usage.used_kb),
+            human_kb(fs.usage.avail_kb),
+            human_kb(fs.usage.total_kb),
+            fs.usage.pct()
+        )?;
+    }
     writeln!(
         out,
         "  io       r {}  w {}",
@@ -158,8 +184,11 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
         human_rate(health.io.write_bps)
     )?;
 
-    writeln!(out)?;
-    writeln!(out, "radios")?;
+    Ok(())
+}
+
+/// The radios section of `--once`.
+fn print_radios(radios: &RadiosPane, out: &mut impl Write) -> Result<()> {
     for iface in &radios.ifaces {
         writeln!(
             out,
@@ -175,6 +204,19 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
             },
             iface.channel.map(|c| format!(" ch{c}")).unwrap_or_default()
         )?;
+        // The totals since this ran, on their own line rather than crammed
+        // onto the first. `0B/s` on a monitor radio is what a quiet minute
+        // looks like and also what an adapter that has never worked looks
+        // like; these are what tell them apart, and the pane has shown them
+        // since the net column landed.
+        writeln!(
+            out,
+            "  {:<10} {:<8} v{:<8} ^{:<8} since start",
+            "",
+            "",
+            human_bytes(iface.rx_total),
+            human_bytes(iface.tx_total)
+        )?;
     }
     if radios.usb.is_empty() {
         writeln!(out, "  usb      none present - adapters gone from the bus")?;
@@ -184,12 +226,6 @@ pub(crate) fn print_once(config: &Config, out: &mut impl Write) -> Result<()> {
         }
     }
 
-    writeln!(out)?;
-    writeln!(out, "classg  {}", config.api)?;
-    // A one-shot has no previous slow tier to carry forward and no second
-    // chance to fetch one, so it always asks for the whole picture.
-    let client = Client::new(config.api.clone(), config.credential());
-    print_classg(&client.poll(5, 5, true, &Slow::default()), out)?;
     Ok(())
 }
 
@@ -766,6 +802,82 @@ mod tests {
         let text = classg(&snapshot);
         assert!(text.contains("tracks   unavailable"), "{text}");
         assert!(text.contains("detects  unavailable"), "{text}");
+    }
+
+    fn health_text(health: &HealthPane) -> String {
+        let mut buffer: Vec<u8> = Vec::new();
+        print_health(health, &mut buffer).expect("rendering must not fail");
+        String::from_utf8(buffer).expect("utf-8")
+    }
+
+    #[test]
+    fn once_lists_every_filesystem_the_pane_lists() {
+        // Reporting `/` alone here while the dashboard shows three is how
+        // somebody ends up trusting the wrong one -- and on a unit recording
+        // to a stick, `/` is the disk least likely to be the one filling up.
+        use crate::panes::health::{DiskUsage, Filesystem};
+        let fs = |mount: &str, used: u64, avail: u64| Filesystem {
+            source: "/dev/x".to_string(),
+            mount: mount.to_string(),
+            usage: DiskUsage {
+                used_kb: used,
+                avail_kb: avail,
+                total_kb: used + avail,
+            },
+        };
+        let mut health = HealthPane::default();
+        health.filesystems = vec![
+            fs("/", 23_800_000, 92_600_000),
+            fs("/boot/firmware", 70_000, 451_000),
+            fs("/media/captures", 512, 244_180_000),
+        ];
+        let text = health_text(&health);
+
+        for mount in ["/", "/boot/firmware", "/media/captures"] {
+            assert!(text.contains(mount), "{mount} missing:\n{text}");
+        }
+        // Free, used and the percentage, as the pane reports them.
+        assert!(text.contains("88.3G free of"), "{text}");
+        assert!(text.contains("%)"), "{text}");
+    }
+
+    #[test]
+    fn a_box_where_df_did_not_run_says_so_once() {
+        let text = health_text(&HealthPane::default());
+        assert!(text.contains("disk     unavailable"), "{text}");
+        assert_eq!(
+            text.matches("disk").count(),
+            1,
+            "one line, not none: {text}"
+        );
+    }
+
+    #[test]
+    fn once_reports_the_totals_that_tell_a_quiet_radio_from_a_dead_one() {
+        // `0B/s` on a monitor interface is what a quiet minute looks like and
+        // also what an adapter that has never worked looks like. The pane has
+        // shown these since the net column landed; this had not.
+        use crate::panes::radios::{Iface, RadiosPane, WirelessMode};
+        let mut radios = RadiosPane::default();
+        radios.ifaces = vec![Iface {
+            name: "wlan-alfa".to_string(),
+            state: "up".to_string(),
+            rx_bps: 0.0,
+            tx_bps: 0.0,
+            rx_total: 142_000_000,
+            tx_total: 0,
+            mode: Some(WirelessMode::Monitor),
+            channel: Some(6),
+            driver: Some("mt7921u".to_string()),
+        }];
+        let mut buffer: Vec<u8> = Vec::new();
+        print_radios(&radios, &mut buffer).expect("rendering must not fail");
+        let text = String::from_utf8(buffer).expect("utf-8");
+
+        assert!(text.contains("wlan-alfa"), "{text}");
+        assert!(text.contains("v0B"), "the instantaneous rate: {text}");
+        assert!(text.contains("135M"), "the total since start: {text}");
+        assert!(text.contains("since start"), "{text}");
     }
 
     #[test]

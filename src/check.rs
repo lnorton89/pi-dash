@@ -211,10 +211,22 @@ pub(crate) fn judge(
         }
     }
 
-    if let Some(disk) = health.disk {
-        let pct = disk.pct();
+    // Every filesystem, not just the one the Pi boots from. This checked
+    // `/` alone, which is precisely the disk a capture is least likely to be
+    // written to: a unit recording to a stick could fill it completely while
+    // this reported a healthy box. Named, because "the disk is full" does not
+    // say which one to go and clear.
+    for fs in &health.filesystems {
+        let pct = fs.usage.pct();
         if pct >= DISK_FULL_PCT {
-            add(Verdict::Degraded, format!("the disk is {pct:.0}% full"));
+            add(
+                Verdict::Degraded,
+                format!(
+                    "{} is {pct:.0}% full, {} left",
+                    fs.mount,
+                    crate::format::human_kb(fs.usage.avail_kb)
+                ),
+            );
         }
     }
 
@@ -229,7 +241,7 @@ const DISK_FULL_PCT: f64 = 90.0;
 mod tests {
     use super::*;
     use crate::panes::classg::{HealthResponse, MonitoringState, SensorHealth, Snapshot};
-    use crate::panes::health::{DiskUsage, Throttle};
+    use crate::panes::health::{DiskUsage, Filesystem, Throttle};
 
     fn healthy_api() -> Snapshot {
         Snapshot {
@@ -355,25 +367,64 @@ mod tests {
         );
     }
 
+    fn filesystem(mount: &str, used: u64, avail: u64) -> Filesystem {
+        Filesystem {
+            source: format!("/dev/{}", mount.trim_start_matches('/')),
+            mount: mount.to_string(),
+            usage: DiskUsage {
+                used_kb: used,
+                avail_kb: avail,
+                total_kb: used + avail,
+            },
+        }
+    }
+
     #[test]
     fn a_disk_about_to_end_a_capture_mid_write_fails() {
         let mut health = HealthPane::default();
-        health.disk = Some(DiskUsage {
-            used_kb: 95,
-            avail_kb: 5,
-            total_kb: 100,
-        });
+        health.filesystems = vec![filesystem("/", 95, 5)];
         let findings = judge(&health, &healthy_api());
         assert_eq!(findings[0].verdict, Verdict::Degraded);
         assert!(findings[0].note.contains("95% full"), "{:?}", findings[0]);
 
         // Half full is not news.
-        health.disk = Some(DiskUsage {
-            used_kb: 50,
-            avail_kb: 50,
-            total_kb: 100,
-        });
+        health.filesystems = vec![filesystem("/", 50, 50)];
         assert!(judge(&health, &healthy_api()).is_empty());
+    }
+
+    #[test]
+    fn the_disk_a_capture_is_written_to_is_checked_not_only_the_boot_one() {
+        // This is the case the whole check was missing. A unit recording to a
+        // stick can fill it completely while `/` sits at twenty percent, and
+        // the probe reported a healthy box right up until the capture died.
+        let mut health = HealthPane::default();
+        health.filesystems = vec![
+            filesystem("/", 20, 80),
+            filesystem("/boot/firmware", 13, 87),
+            filesystem("/media/captures", 98, 2),
+        ];
+        let findings = judge(&health, &healthy_api());
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        // Named, because "the disk is full" does not say which one to clear.
+        assert!(
+            findings[0].note.contains("/media/captures"),
+            "{:?}",
+            findings[0]
+        );
+        assert!(findings[0].note.contains("98% full"), "{:?}", findings[0]);
+        // And how much is left, which is the number you act on.
+        assert!(findings[0].note.contains("left"), "{:?}", findings[0]);
+    }
+
+    #[test]
+    fn several_full_disks_are_each_named() {
+        let mut health = HealthPane::default();
+        health.filesystems = vec![filesystem("/", 96, 4), filesystem("/media/captures", 99, 1)];
+        let findings = judge(&health, &healthy_api());
+        assert_eq!(findings.len(), 2);
+        let line = summarise(Verdict::Degraded, &findings);
+        assert!(line.contains("/media/captures"), "{line}");
+        assert!(line.contains("/ is"), "{line}");
     }
 
     #[test]

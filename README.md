@@ -245,7 +245,8 @@ It judges what the *dashboard* can see, not only what `/health` says: a
 perfectly healthy API on a Pi that is browning out, or 90% through its card, is
 a detector with a date on it. Specifically it fails on a paused recording, a
 non-optional sensor down, an API refusal, a live under-voltage or throttle, and
-a disk at 90%.
+any filesystem at 90% — not just `/`, because on a unit recording to a stick
+that is the disk least likely to be the one filling up.
 
 Two things it deliberately does *not* fail on. Optional hardware that was never
 fitted — a Wi-Fi-only build has no SDR and must not fail for ever, or the check
