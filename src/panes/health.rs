@@ -187,6 +187,21 @@ impl DiskUsage {
     }
 }
 
+/// Whether this sample should fork `df`.
+///
+/// Every fifth sample, and once at startup so the pane is not blank for the
+/// first ten seconds.
+///
+/// The startup condition is `have_read` and not `disk.is_none()`, which is
+/// what it used to be. Those differ on a box where `/` is not backed by a
+/// `/dev/*` device -- an overlayfs root, which is exactly what a containerised
+/// deployment looks like. There `df` runs, returns filesystems, and none of
+/// them is `/`, so `disk` stays None for ever and the old condition forked a
+/// process every two seconds until the dashboard was closed.
+fn should_read_disk(sample_count: u64, have_read: bool) -> bool {
+    sample_count.is_multiple_of(5) || !have_read
+}
+
 /// One mounted filesystem, as `df` reports it.
 ///
 /// The dashboard used to ask `df` about `/` alone, which is the filesystem the
@@ -344,6 +359,9 @@ pub(crate) struct HealthPane {
     /// exactly the machines that could not tell.
     pub(crate) throttle: Option<Throttle>,
     pub(crate) disk: Option<DiskUsage>,
+    /// Whether `df` has run at all yet, as distinct from whether it found a
+    /// root filesystem. See [`should_read_disk`].
+    disk_read: bool,
     /// Every real filesystem, for the disks box. Kept here because this pane
     /// already owns the `df` fork and running a second one to tell the System
     /// pane the same thing would be a fork per tick for nothing.
@@ -383,8 +401,9 @@ impl HealthPane {
         // One `df` for every filesystem rather than one for `/`. Same fork,
         // same cadence, strictly more answer -- and the root row is just the
         // one mounted at `/`.
-        if self.sample_count.is_multiple_of(5) || self.disk.is_none() {
+        if should_read_disk(self.sample_count, self.disk_read) {
             if let Some(text) = command_output("df", &["-P", "-k"]) {
+                self.disk_read = true;
                 self.filesystems = parse_df_all(&text);
                 self.disk = self
                     .filesystems
@@ -591,6 +610,22 @@ tmpfs                392776        0    392776       0% /run/user/1000
         assert!(!mounts.iter().any(|m| m == "/dev/shm"));
         // Docker's overlay is the root filesystem counted a second time.
         assert!(!mounts.iter().any(|m| m.contains("overlay")));
+    }
+
+    #[test]
+    fn df_is_not_forked_every_sample_on_a_box_with_no_dev_backed_root() {
+        // A containerised or overlayfs root means `df` runs, returns
+        // filesystems, and none of them is `/`. Keying the startup read on
+        // "did we find a root" rather than "did we run" forked a process every
+        // two seconds for the life of the dashboard.
+        assert!(should_read_disk(0, false), "the first sample must read");
+        assert!(should_read_disk(1, false), "and keep trying until it has");
+
+        // Once it has run, only the slow cadence.
+        assert!(!should_read_disk(1, true));
+        assert!(!should_read_disk(4, true));
+        assert!(should_read_disk(5, true));
+        assert!(should_read_disk(10, true));
     }
 
     #[test]

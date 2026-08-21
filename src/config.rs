@@ -203,8 +203,8 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             api: DEFAULT_API.to_string(),
-            interval: secs_to_duration(DEFAULT_INTERVAL_SECS),
-            api_interval: secs_to_duration(DEFAULT_API_INTERVAL_SECS),
+            interval: secs_to_duration(DEFAULT_INTERVAL_SECS, DEFAULT_INTERVAL_SECS),
+            api_interval: secs_to_duration(DEFAULT_API_INTERVAL_SECS, DEFAULT_API_INTERVAL_SECS),
             theme: "cyan".to_string(),
             glyphs: "unicode".to_string(),
             processes: None,
@@ -227,11 +227,17 @@ impl Default for Config {
 /// Clamps a configured interval into something sane. A zero or negative
 /// interval would spin the sample loop at full CPU on a box whose whole
 /// problem is that it browns out under load.
-fn secs_to_duration(secs: f64) -> std::time::Duration {
+///
+/// The fallback is a parameter because there are two intervals with different
+/// defaults. Hard-coding the local one meant `api_interval_secs = nan` in a
+/// config file resolved to the LOCAL default of two seconds rather than the
+/// API default of three -- a wrong value, quietly, from the one input that
+/// should have been rejected.
+fn secs_to_duration(secs: f64, fallback: f64) -> std::time::Duration {
     let clamped = if secs.is_finite() {
         secs.clamp(0.25, 3600.0)
     } else {
-        DEFAULT_INTERVAL_SECS
+        fallback
     };
     std::time::Duration::from_secs_f64(clamped)
 }
@@ -277,7 +283,7 @@ pub(crate) fn load_config(override_path: Option<PathBuf>, cli: &CliOverrides) ->
         config.origins.set("api", Origin::Cli);
     }
     if let Some(secs) = cli.interval {
-        config.interval = secs_to_duration(secs);
+        config.interval = secs_to_duration(secs, DEFAULT_INTERVAL_SECS);
         config.origins.set("interval", Origin::Cli);
     }
 
@@ -306,11 +312,11 @@ fn apply_file(config: &mut Config, file: ConfigFile) {
         config.origins.set("api", Origin::File);
     }
     if let Some(secs) = file.dash.interval_secs {
-        config.interval = secs_to_duration(secs);
+        config.interval = secs_to_duration(secs, DEFAULT_INTERVAL_SECS);
         config.origins.set("interval", Origin::File);
     }
     if let Some(secs) = file.dash.api_interval_secs {
-        config.api_interval = secs_to_duration(secs);
+        config.api_interval = secs_to_duration(secs, DEFAULT_API_INTERVAL_SECS);
         config.origins.set("api_interval", Origin::File);
     }
     if let Some(theme) = file.dash.theme {
@@ -353,7 +359,7 @@ fn apply_env(config: &mut Config) {
         // reasonable `0.5` made every tick emit an arithmetic syntax error and
         // silently zeroed the rate columns. Parse as a float and clamp.
         if let Ok(secs) = raw.trim().parse::<f64>() {
-            config.interval = secs_to_duration(secs);
+            config.interval = secs_to_duration(secs, DEFAULT_INTERVAL_SECS);
             config.origins.set("interval", Origin::Env);
         }
     }
@@ -420,7 +426,10 @@ mod tests {
         let file: ConfigFile = toml::from_str("[dash]\napi = \"http://pi.local:9000\"\n").unwrap();
         apply_file(&mut config, file);
         assert_eq!(config.api, "http://pi.local:9000");
-        assert_eq!(config.interval, secs_to_duration(DEFAULT_INTERVAL_SECS));
+        assert_eq!(
+            config.interval,
+            secs_to_duration(DEFAULT_INTERVAL_SECS, DEFAULT_INTERVAL_SECS)
+        );
         assert_eq!(config.usb_vendor_ids.len(), DEFAULT_USB_VENDOR_IDS.len());
     }
 
@@ -464,10 +473,29 @@ mod tests {
 
     #[test]
     fn intervals_are_clamped_away_from_zero() {
-        assert!(secs_to_duration(0.0) >= std::time::Duration::from_millis(250));
-        assert!(secs_to_duration(-4.0) >= std::time::Duration::from_millis(250));
-        assert!(secs_to_duration(f64::NAN) > std::time::Duration::ZERO);
-        assert_eq!(secs_to_duration(0.5), std::time::Duration::from_millis(500));
+        assert!(
+            secs_to_duration(0.0, DEFAULT_INTERVAL_SECS) >= std::time::Duration::from_millis(250)
+        );
+        assert!(
+            secs_to_duration(-4.0, DEFAULT_INTERVAL_SECS) >= std::time::Duration::from_millis(250)
+        );
+
+        // A value that is not a number falls back to the default for the
+        // setting being resolved, not to whichever one happened to be written
+        // into the helper.
+        assert_eq!(
+            secs_to_duration(f64::NAN, DEFAULT_API_INTERVAL_SECS),
+            std::time::Duration::from_secs_f64(DEFAULT_API_INTERVAL_SECS)
+        );
+        assert_eq!(
+            secs_to_duration(f64::INFINITY, DEFAULT_INTERVAL_SECS),
+            std::time::Duration::from_secs_f64(DEFAULT_INTERVAL_SECS)
+        );
+        assert!(secs_to_duration(f64::NAN, DEFAULT_INTERVAL_SECS) > std::time::Duration::ZERO);
+        assert_eq!(
+            secs_to_duration(0.5, DEFAULT_INTERVAL_SECS),
+            std::time::Duration::from_millis(500)
+        );
     }
 
     /// A file only this test writes, removed when it goes out of scope.
@@ -538,7 +566,7 @@ mod tests {
         assert_eq!(config.origins.of("api_interval"), Origin::Default);
         assert_eq!(
             config.api_interval,
-            secs_to_duration(DEFAULT_API_INTERVAL_SECS)
+            secs_to_duration(DEFAULT_API_INTERVAL_SECS, DEFAULT_API_INTERVAL_SECS)
         );
     }
 
@@ -572,6 +600,27 @@ mod tests {
         if config.origins.of("api") == Origin::File {
             assert_eq!(config.api, "http://pi.local:8081");
         }
+    }
+
+    #[test]
+    fn an_unusable_interval_falls_back_to_its_own_default_not_the_other_one() {
+        // TOML has `nan` as a float literal, so this is reachable from a file
+        // somebody wrote. The API poll defaults to three seconds and the local
+        // sample to two; a shared fallback resolved the first to the second's
+        // value -- a wrong number from the one input that should have been
+        // rejected outright.
+        let file = TempConfig::new(
+            "nan-interval",
+            "[dash]
+api_interval_secs = nan
+",
+        );
+        let config = load_config(Some(file.0.clone()), &CliOverrides::default()).expect("loads");
+        assert_eq!(
+            config.api_interval,
+            secs_to_duration(DEFAULT_API_INTERVAL_SECS, DEFAULT_API_INTERVAL_SECS),
+            "the API poll fell back to the local sample's default"
+        );
     }
 
     #[test]
