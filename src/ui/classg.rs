@@ -28,7 +28,7 @@ use crate::app::{App, Pane};
 use crate::format::{clip, coarse_uptime, compact_count, human_bytes, short_age};
 use crate::panes::classg::{
     collapse_runs, detection_class_label, Capture, CredentialKind, Detection, DetectionPage,
-    FlexTime, HealthResponse, Snapshot, SpectrumSweep, Track, TrackPage, MAX_ROWS,
+    FlexTime, HealthResponse, Snapshot, SpectrumSweep, Track, TrackPage, MAX_DETECTION_ROWS,
 };
 
 /// Below this the detections table drops its SENSOR column. On a unit with one
@@ -106,15 +106,9 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // Ask for what will fit next time. This pane is handed the slack left over
     // from the two fixed-height ones, so on a tall terminal that is a real
     // list rather than the first three rows of one.
-    //
-    // Detections ask for double, because consecutive repeats of one contact
-    // are folded into a single row before they are drawn: requesting exactly
-    // the number of rows available would leave the bottom half of the list
-    // empty on precisely the unit where it matters, the one with an aeroplane
-    // overhead. Capped at MAX_ROWS, and it is a loopback request either way.
     app.classg.set_hints(
         track_room.max(1),
-        detection_room.saturating_mul(2).clamp(1, MAX_ROWS),
+        detection_request(app.classg.snapshot.detections.as_ref(), detection_room),
     );
 
     frame.render_widget(Paragraph::new(lines), inner);
@@ -744,6 +738,36 @@ fn track_detail(track: &Track) -> Option<String> {
 /// Tracks are sparse — most of the time nothing is flying, and on a tall pane
 /// that leaves forty-odd rows empty. Detections are the stream underneath them
 /// and are never empty while a sensor is alive, so they fill whatever is left.
+/// How many detections to ask for, so the folded list fills the space it has.
+///
+/// Consecutive repeats of one contact fold into a single row, and the fold
+/// ratio is a property of the sky rather than of this code: on a quiet unit it
+/// is 1, and on one with an aeroplane overhead it was measured at thirteen --
+/// forty detections fetched, three rows drawn, and twenty spare rows of pane
+/// left empty underneath them. A fixed multiplier cannot cover both, so this
+/// measures what the last page actually folded to and scales the next request
+/// by it.
+///
+/// It converges rather than runs away. Once the list fills the room, drawn
+/// equals room and the request settles at whatever produced that. The extra
+/// cost is only ever paid on a unit that is repeating itself, which is exactly
+/// the unit where the spare rows were being wasted.
+pub(crate) fn detection_request(page: Option<&DetectionPage>, room: usize) -> usize {
+    let room = room.max(1);
+    let Some(page) = page else {
+        return room.min(MAX_DETECTION_ROWS);
+    };
+    let fetched = page.detections.len();
+    let drawn = collapse_runs(&page.detections).len();
+    // Nothing came back, or nothing folded: ask for the room and no more.
+    if fetched == 0 || drawn == 0 {
+        return room.min(MAX_DETECTION_ROWS);
+    }
+    (room.saturating_mul(fetched))
+        .div_ceil(drawn)
+        .clamp(1, MAX_DETECTION_ROWS)
+}
+
 fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) -> Vec<Line<'a>> {
     let mut lines = vec![Line::default()];
     let Some(page) = page else {

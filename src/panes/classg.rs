@@ -44,6 +44,21 @@ use serde::Deserialize;
 /// nothing.
 pub(crate) const MAX_ROWS: usize = 40;
 
+/// The ceiling on a detection request, which is higher than [`MAX_ROWS`]
+/// because the list folds before it is drawn.
+///
+/// store.NormaliseLimit accepts up to 1000; this stops well short. A request
+/// only reaches this size on a unit whose detections are nearly all repeats of
+/// a handful of contacts, and on that unit the alternative is half a pane of
+/// nothing. Where the sky is varied the fold ratio is 1 and the request stays
+/// the size of the pane, so the cost is paid only where it buys rows.
+pub(crate) const MAX_DETECTION_ROWS: usize = 200;
+
+/// Checked where it cannot drift. store.NormaliseLimit rejects anything above
+/// a thousand, and a rejected limit costs the whole section rather than
+/// returning a shorter list.
+const _: () = assert!(MAX_DETECTION_ROWS <= 1000);
+
 /// Long enough for a Pi under load to answer, short enough that a wedged API
 /// does not hold the poller past its next tick.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -1026,7 +1041,7 @@ impl Client {
         let detections = self
             .get_json(&format!(
                 "/api/v1/detections?limit={}",
-                detection_rows.clamp(1, MAX_ROWS)
+                detection_rows.clamp(1, MAX_DETECTION_ROWS)
             ))
             .map_err(&mut note)
             .ok();
@@ -1925,9 +1940,14 @@ mod tests {
 
             let tracks = stub.request_for("/api/v1/tracks").expect("tracks");
             assert!(tracks.target.contains("limit=1"), "{}", tracks.target);
+            // Detections clamp higher than tracks, because the list folds
+            // before it is drawn and a repeating sky needs several fetched
+            // rows per drawn one.
             let detections = stub.request_for("/api/v1/detections").expect("detections");
             assert!(
-                detections.target.contains(&format!("limit={MAX_ROWS}")),
+                detections
+                    .target
+                    .contains(&format!("limit={MAX_DETECTION_ROWS}")),
                 "{}",
                 detections.target
             );

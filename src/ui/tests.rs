@@ -1817,3 +1817,84 @@ fn the_help_card_fits_every_line_it_carries() {
     // And nothing wrapped onto a line of its own.
     assert!(!rows.iter().any(|r| r.trim_start().starts_with("top)")));
 }
+
+/// A page of detections that folds by `ratio`: `distinct` contacts, each
+/// repeating, in the order the API returns them.
+fn folding_page(distinct: usize, each: usize) -> DetectionPage {
+    let mut detections = Vec::new();
+    for contact in 0..distinct {
+        for _ in 0..each {
+            detections.push(Detection {
+                sensor_id: "sdr-0".to_string(),
+                sensor_kind: "sdr".to_string(),
+                detection_class: "D".to_string(),
+                adsb: Some(Adsb {
+                    icao: format!("a9d7{contact:02}"),
+                    callsign: None,
+                }),
+                ..Detection::default()
+            });
+        }
+    }
+    let total = detections.len() as u64;
+    DetectionPage { detections, total }
+}
+
+#[test]
+fn a_repeating_sky_asks_for_enough_detections_to_fill_the_pane() {
+    use crate::ui::classg::detection_request;
+    // Measured on the real unit: forty fetched, three drawn, twenty rows of
+    // pane left empty underneath. Doubling the request could never close that.
+    let page = folding_page(3, 13);
+    let asked = detection_request(Some(&page), 21);
+    assert!(
+        asked > 40,
+        "a 13x fold needs far more than the old ceiling, got {asked}"
+    );
+    assert!(asked <= 200, "and never more than the API cap, got {asked}");
+}
+
+#[test]
+fn a_varied_sky_asks_for_no_more_than_it_can_draw() {
+    use crate::ui::classg::detection_request;
+    // Nothing folds, so every fetched row is a drawn row and fetching extra
+    // would be a bigger query every three seconds for rows with nowhere to go.
+    let page = folding_page(30, 1);
+    assert_eq!(detection_request(Some(&page), 21), 21);
+}
+
+#[test]
+fn the_detection_request_settles_instead_of_running_away() {
+    use crate::ui::classg::detection_request;
+    // Once the list fills the room, drawn equals room and the request has to
+    // stop growing, or every poll asks for more than the last one for ever.
+    let mut asked: usize = 21;
+    for _ in 0..8 {
+        // Each round, the API returns what was asked for, folding 4:1.
+        let page = folding_page(asked.div_ceil(4), 4);
+        let next = detection_request(Some(&page), 21);
+        assert!(next <= 200);
+        asked = next;
+    }
+    // Converged, not oscillating or pinned at the ceiling.
+    let page = folding_page(asked.div_ceil(4), 4);
+    assert_eq!(detection_request(Some(&page), 21), asked);
+}
+
+#[test]
+fn an_empty_or_missing_page_asks_only_for_the_room() {
+    use crate::ui::classg::detection_request;
+    assert_eq!(detection_request(None, 12), 12);
+    assert_eq!(
+        detection_request(
+            Some(&DetectionPage {
+                detections: Vec::new(),
+                total: 0
+            }),
+            12
+        ),
+        12
+    );
+    // And a pane with no room still asks for something the API will accept.
+    assert_eq!(detection_request(None, 0), 1);
+}
