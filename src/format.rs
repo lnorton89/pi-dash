@@ -94,19 +94,37 @@ pub(crate) fn human_bytes(bytes: u64) -> String {
     human_kb(bytes / 1024)
 }
 
-/// `402` / `1.2k` / `3.4M` — a count in a column four characters wide.
+/// `402` / `1.2k` / `3.4M` — a count in at most six characters.
 ///
 /// Detection counts run to five and six figures on a busy afternoon, and a
 /// column that grows two characters when one track crosses 100 000 reflows
 /// everything to its right.
+///
+/// The branch tests the SCALED value, not the raw one. Testing `n < 1_000_000`
+/// and then formatting to one decimal place sent 999 950 down the kilo branch,
+/// where it rounded up and printed `1000.0k` — seven characters, in a column
+/// sized for four, for a number that should read `1.0M`.
 pub(crate) fn compact_count(n: u64) -> String {
     if n < 1000 {
         return n.to_string();
     }
-    if n < 1_000_000 {
-        return format!("{:.1}k", n as f64 / 1000.0);
+    let thousands = n as f64 / 1000.0;
+    if thousands < 999.95 {
+        return format!("{thousands:.1}k");
     }
-    format!("{:.1}M", n as f64 / 1_000_000.0)
+    let millions = n as f64 / 1_000_000.0;
+    if millions < 999.95 {
+        return format!("{millions:.1}M");
+    }
+    let billions = n as f64 / 1_000_000_000.0;
+    if billions < 999.95 {
+        return format!("{billions:.1}G");
+    }
+    // Past this the number is not a detection count any more, and a column
+    // that grows to fourteen characters to say so wrecks the table it sits in.
+    // The bound this function promises has to hold for every u64, or it is not
+    // a bound -- it is a description of the values somebody expected.
+    ">999G".to_string()
 }
 
 /// Truncates to `max` *characters* (not bytes) so a non-ASCII device string
@@ -184,6 +202,27 @@ mod tests {
         assert_eq!(compact_count(1_000), "1.0k");
         assert_eq!(compact_count(12_400), "12.4k");
         assert_eq!(compact_count(2_500_000), "2.5M");
+    }
+
+    #[test]
+    fn a_count_never_rounds_itself_into_an_extra_column() {
+        // The boundary the old branch fell through: just under a million took
+        // the kilo branch and rounded up to `1000.0k`, seven characters for a
+        // number that reads `1.0M` in four.
+        assert_eq!(compact_count(999_949), "999.9k");
+        assert_eq!(compact_count(999_950), "1.0M");
+        assert_eq!(compact_count(999_999), "1.0M");
+        assert_eq!(compact_count(999_949_999), "999.9M");
+        assert_eq!(compact_count(999_950_000), "1.0G");
+
+        // Whatever the count, it fits the widest column that uses it.
+        for n in [0, 1, 999, 1_000, 999_950, 1_000_000, u64::MAX] {
+            assert!(
+                compact_count(n).chars().count() <= 6,
+                "{n} rendered as {}",
+                compact_count(n)
+            );
+        }
     }
 
     #[test]

@@ -139,7 +139,13 @@ fn verdict_chip<'a>(app: &App, width: usize) -> Vec<Span<'a>> {
 
     // Room left after the host, the address and the clock, with a gap either
     // side.
-    let used = 10 + app.host.chars().count() + 2 + app.config.api.chars().count();
+    // The address is drawn with its scheme trimmed, so the budget counts it
+    // trimmed too. Counting the whole `http://…` claimed seven columns that
+    // were never drawn and dropped the chip on terminals where it fitted.
+    let used = 10
+        + app.host.chars().count()
+        + 2
+        + app.config.api.trim_start_matches("http://").chars().count();
     let room = width.saturating_sub(used + CLOCK_W + 4);
 
     // The whole word or nothing. Clipping it puts `deg` or `dow` on the header

@@ -866,8 +866,17 @@ pub(crate) struct RowHints {
 }
 
 impl RowHints {
-    fn limit(counter: &AtomicUsize) -> usize {
-        counter.load(Ordering::Relaxed).clamp(1, MAX_ROWS)
+    /// Reads one hint, held to that hint's own ceiling.
+    ///
+    /// The ceiling is a parameter because the two counters do not share one.
+    /// Tracks are drawn as they arrive, so asking for more than the pane can
+    /// show is waste; detections are folded before they are drawn, so a
+    /// repeating sky needs several fetched rows per drawn one. Clamping both
+    /// to MAX_ROWS -- which this did -- silently capped the detection request
+    /// at forty, and with it the whole fold-ratio mechanism, its constant, and
+    /// the tests that believed they were exercising it.
+    fn limit(counter: &AtomicUsize, ceiling: usize) -> usize {
+        counter.load(Ordering::Relaxed).clamp(1, ceiling)
     }
 }
 
@@ -1240,8 +1249,8 @@ fn poll_loop(
         // tier too: a dashboard that waits half a minute before it can say the
         // API wants a login is one you have already stopped reading.
         let snapshot = client.poll(
-            RowHints::limit(&hints.tracks),
-            RowHints::limit(&hints.detections),
+            RowHints::limit(&hints.tracks, MAX_ROWS),
+            RowHints::limit(&hints.detections, MAX_DETECTION_ROWS),
             polls.is_multiple_of(SLOW_EVERY),
             &slow,
         );
@@ -2234,10 +2243,29 @@ mod tests {
     #[test]
     fn row_hints_are_clamped_into_the_range_the_api_accepts() {
         let hints = RowHints::default();
-        assert_eq!(RowHints::limit(&hints.tracks), 1, "zero would be rejected");
+        assert_eq!(
+            RowHints::limit(&hints.tracks, MAX_ROWS),
+            1,
+            "zero would be rejected"
+        );
         hints.tracks.store(9999, Ordering::Relaxed);
-        assert_eq!(RowHints::limit(&hints.tracks), MAX_ROWS);
+        assert_eq!(RowHints::limit(&hints.tracks, MAX_ROWS), MAX_ROWS);
         hints.tracks.store(12, Ordering::Relaxed);
-        assert_eq!(RowHints::limit(&hints.tracks), 12);
+        assert_eq!(RowHints::limit(&hints.tracks, MAX_ROWS), 12);
+
+        // Detections have their own, higher ceiling. Sharing the tracks one
+        // held every detection request to forty however many rows the folded
+        // list needed, which is the entire mechanism defeated by one clamp.
+        hints.detections.store(200, Ordering::Relaxed);
+        assert_eq!(
+            RowHints::limit(&hints.detections, MAX_DETECTION_ROWS),
+            200,
+            "a folded list must be able to ask for more than a track list"
+        );
+        hints.detections.store(9999, Ordering::Relaxed);
+        assert_eq!(
+            RowHints::limit(&hints.detections, MAX_DETECTION_ROWS),
+            MAX_DETECTION_ROWS
+        );
     }
 }

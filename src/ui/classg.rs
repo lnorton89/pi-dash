@@ -23,7 +23,7 @@ use ratatui::{
     Frame,
 };
 
-use super::{numbered_pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
+use super::{numbered_pane_block, push_if_fits, table_header, BAD, DIM, OK, WARN};
 use std::collections::HashMap;
 
 use super::gauge::{self, Glyphs, Ramp};
@@ -39,6 +39,19 @@ use crate::panes::classg::{
 /// the difference between "the radios are fine" and "one of them stopped", so
 /// it is the first thing to come back when there is room for it.
 const SENSOR_COLUMN_AT: usize = 54;
+
+/// The label column [`labelled`] writes, and the whole prefix it costs.
+///
+/// Every fit calculation in this pane used `GUTTER + 1`, which is ten -- but
+/// GUTTER belongs to [`field`], a two-plus-seven gutter this pane does not
+/// use, and `labelled` draws two spaces plus a ten-column label. So each of
+/// them believed it had two more columns than existed and could accept a line
+/// that then got clipped at the frame, turning `11.5G free of 28.9G` into
+/// `11.5G free of 28`: a different and much worse number.
+///
+/// Derived from one constant so the two cannot drift apart again.
+const LABEL_W: usize = 10;
+const LABEL_GUTTER: usize = 2 + LABEL_W;
 
 /// Columns a sensor row uses before its trace: indent, id, kind, state, beat
 /// and the five-minute count.
@@ -159,7 +172,7 @@ fn unreachable_lines<'a>(error: Option<&str>, base: &str) -> Vec<Line<'a>> {
 /// A label in the gutter every pane shares, so values line up down the column.
 fn labelled<'a>(label: &str, value: Vec<Span<'a>>) -> Line<'a> {
     let mut spans = vec![Span::styled(
-        format!("  {label:<10}"),
+        format!("  {label:<LABEL_W$}"),
         Style::default().fg(DIM),
     )];
     spans.extend(value);
@@ -222,7 +235,7 @@ fn status_lines<'a>(snapshot: &Snapshot, health: &HealthResponse, width: usize) 
         // "libsql · docker · sync" -- which ran straight into the figure
         // after it as `sync88.3G free of 117.0G`.
         let detail = format!("{:<10}  ", detail);
-        let mut used = GUTTER + 1 + detail.chars().count();
+        let mut used = LABEL_GUTTER + detail.chars().count();
         let mut spans = vec![Span::raw(detail)];
         match (system.host.disk_free_bytes, system.host.disk_total_bytes) {
             (Some(free), Some(total)) => {
@@ -319,7 +332,7 @@ fn status_lines<'a>(snapshot: &Snapshot, health: &HealthResponse, width: usize) 
             (None, _) => {
                 let (state, detail) = remedy(snapshot.credential);
                 let mut spans = vec![Span::styled(state, Style::default().fg(WARN))];
-                let mut used = GUTTER + 1 + state.len();
+                let mut used = LABEL_GUTTER + state.len();
                 // The detail is the first thing to drop. "not logged in" plus a
                 // sentence was wider than a 46-column pane and got sliced at
                 // the frame, which turned advice into a fragment.
@@ -531,7 +544,7 @@ fn radio_lines<'a>(snapshot: &Snapshot, width: usize) -> Vec<Line<'a>> {
             clip(&sweep.band, 10),
             elapsed(sweep.started_at.as_ref())
         );
-        let mut used = GUTTER + 1 + "running".len() + head.chars().count();
+        let mut used = LABEL_GUTTER + "running".len() + head.chars().count();
         spans.push(dim(head));
         push_if_fits(
             &mut spans,
@@ -830,7 +843,14 @@ pub(crate) fn detection_request(page: Option<&DetectionPage>, room: usize) -> us
 fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) -> Vec<Line<'a>> {
     let mut lines = vec![Line::default()];
     let Some(page) = page else {
-        return Vec::new();
+        // Said, not omitted. `tracks` has always printed this and `--once`
+        // prints both, so a /detections that starts answering 500 made the
+        // whole section vanish from the pane while the same box reported
+        // "detects unavailable" over SSH -- two views of one state
+        // disagreeing, and the pane taking the silent option this dashboard
+        // exists to argue against.
+        lines.push(Line::from(dim("  detections unavailable".to_string())));
+        return lines;
     };
     lines.push(Line::from(vec![
         Span::styled(

@@ -2342,3 +2342,74 @@ fn a_sensor_trace_cannot_grow_without_bound() {
         app.classg.sensor_history["wifi-1"].len()
     );
 }
+
+#[test]
+fn a_detections_endpoint_that_broke_says_so_rather_than_vanishing() {
+    // tracks has always printed "unavailable" and --once prints both, so a
+    // /detections answering 500 made the section disappear from the pane while
+    // the same box reported it over SSH. The silent option is the one this
+    // dashboard exists to argue against.
+    let mut app = test_app();
+    with_load(&mut app);
+    let mut snapshot = busy_snapshot();
+    snapshot.detections = None;
+    snapshot.tracks = None;
+    app.classg.snapshot = snapshot;
+
+    let rows = render(&mut app, 200, 44);
+    assert!(contains(&rows, "tracks unavailable"), "{}", rows.join("\n"));
+    assert!(
+        contains(&rows, "detections unavailable"),
+        "the section vanished:\n{}",
+        rows.join("\n")
+    );
+}
+
+#[test]
+fn the_classg_pane_measures_the_gutter_it_actually_draws() {
+    // Every fit calculation here used GUTTER + 1 = 10, but `labelled` draws
+    // two spaces plus a ten-column label. Believing it had two spare columns
+    // let it accept a line that the frame then clipped, turning a size into a
+    // different and smaller number.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.classg.snapshot = busy_snapshot();
+    app.focus = Pane::Classg;
+
+    // Swept one column at a time across the narrow layout, where the pane is
+    // tight enough for two columns to decide the question. With the gutter
+    // undercounted by two, widths 43 and 44 rendered
+    // `11.5G free of 28.` and `11.5G free of 28.9` -- a total that has lost
+    // its tail, which is a different and smaller number rather than a shorter
+    // way of writing the same one.
+    for width in 40u16..=99 {
+        for row in render(&mut app, width, 30) {
+            if row.contains("free of") {
+                assert!(
+                    row.contains("28.9G"),
+                    "a size was clipped mid-number at {width}: {row}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_verdict_chip_budgets_the_address_as_it_is_drawn() {
+    // The header trims `http://` off the address before drawing it, but the
+    // chip's room calculation counted the whole thing -- claiming seven
+    // columns that were never on screen and dropping the verdict on terminals
+    // where it fitted. It fails safe, so nothing caught it.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.classg.snapshot = healthy_snapshot();
+
+    // Seven columns either side of the boundary: with the scheme counted, the
+    // chip needs 52 columns; drawn as it actually is, it needs 45.
+    for width in 46u16..=51 {
+        assert!(
+            contains(&render(&mut app, width, 12), "ok"),
+            "the verdict was dropped at {width} despite fitting"
+        );
+    }
+}

@@ -64,9 +64,6 @@ pub(crate) struct App {
     pub(crate) health: HealthPane,
     pub(crate) radios: RadiosPane,
     pub(crate) classg: ClassgPane,
-    /// Local samples taken since start. Panes that only refresh every fifth
-    /// sample key off their own counters; this is for the footer.
-    pub(crate) samples: u64,
 }
 
 impl App {
@@ -86,7 +83,6 @@ impl App {
             health: HealthPane::default(),
             radios: RadiosPane::default(),
             classg,
-            samples: 0,
             config,
         }
     }
@@ -102,7 +98,6 @@ impl App {
             &self.config.usb_vendor_ids,
             &self.config.ignore_interfaces,
         );
-        self.samples = self.samples.saturating_add(1);
     }
 }
 

@@ -234,9 +234,18 @@ pub(crate) fn parse_df_all(text: &str) -> Vec<Filesystem> {
     let mut out = Vec::new();
     for line in text.lines().skip(1) {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        let (Some(source), Some(mount)) = (fields.first(), fields.get(5)) else {
+        let Some(source) = fields.first() else {
             continue;
         };
+        // Everything from the sixth field on, rejoined. df -P puts the mount
+        // point last and does not escape it, so a stick auto-mounted at
+        // `/media/pi/MY DISK` arrives as two fields -- and taking only the
+        // first left the pane showing `/media/pi/MY` and --check telling you
+        // to go and clear a path that does not exist.
+        if fields.len() <= 5 {
+            continue;
+        }
+        let mount = fields[5..].join(" ");
         if !source.starts_with("/dev/") || seen.iter().any(|s| s == source) {
             continue;
         }
@@ -246,7 +255,7 @@ pub(crate) fn parse_df_all(text: &str) -> Vec<Filesystem> {
         seen.push((*source).to_string());
         out.push(Filesystem {
             source: (*source).to_string(),
-            mount: (*mount).to_string(),
+            mount,
             usage,
         });
     }
@@ -582,6 +591,20 @@ tmpfs                392776        0    392776       0% /run/user/1000
         assert!(!mounts.iter().any(|m| m == "/dev/shm"));
         // Docker's overlay is the root filesystem counted a second time.
         assert!(!mounts.iter().any(|m| m.contains("overlay")));
+    }
+
+    #[test]
+    fn a_mount_point_containing_spaces_survives_whole() {
+        // df -P puts the mount last and does not escape it. Taking only the
+        // first field left the pane naming `/media/pi/MY` and --check telling
+        // you to clear a path that does not exist.
+        let text = "Filesystem     1024-blocks     Used Available Capacity Mounted on
+/dev/sda1        100 40  60      40% /media/pi/MY DISK
+";
+        let found = parse_df_all(text);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].mount, "/media/pi/MY DISK");
+        assert_eq!(found[0].label(), "MY DISK");
     }
 
     #[test]
