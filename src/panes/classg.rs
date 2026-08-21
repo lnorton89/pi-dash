@@ -29,6 +29,7 @@
 //! is the truth, and inventing the difference is the failure ADR-0003 exists to
 //! prevent.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
@@ -1088,9 +1089,31 @@ pub(crate) struct ClassgPane {
     pub(crate) last_ok: Option<Instant>,
     pub(crate) polls: u64,
     pub(crate) hints: Arc<RowHints>,
+    /// `detections_5m` over time, per sensor id, oldest first.
+    ///
+    /// The number on its own cannot answer the question this pane exists for.
+    /// A radio whose antenna has worked loose keeps heartbeating, keeps
+    /// reporting healthy, and its five-minute count slides from four hundred
+    /// to nothing over a quarter of an hour -- which reads, at any single
+    /// glance, exactly like an afternoon with nothing in the sky.
+    pub(crate) sensor_history: HashMap<String, Vec<f64>>,
+    /// When a sample was last taken for that history.
+    last_history: Option<Instant>,
     shutdown: Arc<AtomicBool>,
     rx: Receiver<Snapshot>,
 }
+
+/// How often a point is added to a sensor's trace.
+///
+/// Not every poll. `detections_5m` is a five-minute rolling count, so at a
+/// three-second cadence a full sparkline would span barely a minute of a
+/// window five times that long and show an almost flat line whatever the radio
+/// was doing. At half a minute apart, the trace covers a quarter of an hour
+/// and a radio going quiet is a visible slope.
+const HISTORY_EVERY: Duration = Duration::from_secs(30);
+
+/// Points kept per sensor. Two per braille column, and the column is narrow.
+const SENSOR_HISTORY: usize = 30;
 
 impl std::fmt::Debug for ClassgPane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1129,6 +1152,8 @@ impl ClassgPane {
             last_ok: None,
             polls: 0,
             hints,
+            sensor_history: HashMap::new(),
+            last_history: None,
             shutdown,
             rx,
         }
@@ -1147,7 +1172,42 @@ impl ClassgPane {
             self.polls += 1;
             updated = true;
         }
+        if updated {
+            self.record_sensor_rates(Instant::now());
+        }
         updated
+    }
+
+    /// Adds a point to each sensor's trace, at most every [`HISTORY_EVERY`].
+    ///
+    /// Split from `drain` and taking its own clock so the spacing rule can be
+    /// tested without waiting half a minute.
+    pub(crate) fn record_sensor_rates(&mut self, now: Instant) {
+        if let Some(last) = self.last_history {
+            if now.duration_since(last) < HISTORY_EVERY {
+                return;
+            }
+        }
+        self.last_history = Some(now);
+        let Some(health) = &self.snapshot.health else {
+            return;
+        };
+        for sensor in &health.sensors {
+            let trace = self
+                .sensor_history
+                .entry(sensor.sensor_id.clone())
+                .or_default();
+            if trace.len() >= SENSOR_HISTORY {
+                let excess = trace.len() + 1 - SENSOR_HISTORY;
+                trace.drain(..excess);
+            }
+            trace.push(sensor.detections_5m as f64);
+        }
+        // A sensor that has gone takes its trace with it, so a unit that has
+        // had adapters swapped does not accumulate traces for radios that are
+        // no longer fitted.
+        self.sensor_history
+            .retain(|id, _| health.sensors.iter().any(|s| &s.sensor_id == id));
     }
 
     pub(crate) fn set_hints(&self, tracks: usize, detections: usize) {

@@ -24,6 +24,9 @@ use ratatui::{
 };
 
 use super::{numbered_pane_block, push_if_fits, table_header, BAD, DIM, GUTTER, OK, WARN};
+use std::collections::HashMap;
+
+use super::gauge::{self, Glyphs, Ramp};
 use crate::app::{App, Pane};
 use crate::format::{clip, coarse_uptime, compact_count, human_bytes, short_age};
 use crate::panes::classg::{
@@ -36,6 +39,15 @@ use crate::panes::classg::{
 /// the difference between "the radios are fine" and "one of them stopped", so
 /// it is the first thing to come back when there is room for it.
 const SENSOR_COLUMN_AT: usize = 54;
+
+/// Columns a sensor row uses before its trace: indent, id, kind, state, beat
+/// and the five-minute count.
+const SENSOR_ROW_W: usize = 3 + 11 + 6 + 6 + 5 + 7;
+/// The trace never grows past this, however wide the pane is. It is context
+/// for the number beside it, not the subject of the row.
+const SENSOR_SPARK_W: usize = 12;
+/// Below this a sparkline is too short to have a shape, so it is dropped.
+const SENSOR_SPARK_MIN: usize = 6;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let title = format!(" ClassG  {} ", app.config.api.trim_start_matches("http://"));
@@ -75,7 +87,12 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     lines.extend(status_lines(snapshot, health, width));
-    lines.extend(sensor_lines(health, width));
+    lines.extend(sensor_lines(
+        health,
+        &app.classg.sensor_history,
+        app.glyphs,
+        width,
+    ));
     lines.push(Line::default());
     lines.push(fusion_line(health, width));
     lines.extend(radio_lines(snapshot, width));
@@ -332,7 +349,12 @@ fn status_lines<'a>(snapshot: &Snapshot, health: &HealthResponse, width: usize) 
 // Sensors and fusion
 // ---------------------------------------------------------------------------
 
-fn sensor_lines<'a>(health: &HealthResponse, width: usize) -> Vec<Line<'a>> {
+fn sensor_lines<'a>(
+    health: &HealthResponse,
+    history: &HashMap<String, Vec<f64>>,
+    glyphs: Glyphs,
+    width: usize,
+) -> Vec<Line<'a>> {
     let mut lines = vec![Line::from(Span::styled(
         "  sensors",
         Style::default().add_modifier(Modifier::BOLD),
@@ -347,9 +369,21 @@ fn sensor_lines<'a>(health: &HealthResponse, width: usize) -> Vec<Line<'a>> {
     // BEAT is the age of the last heartbeat and 5MIN the detection count over
     // the last five minutes. Unheaded they rendered as `5s 5m:40`, which is
     // two numbers and a unit nobody can expand on sight.
+    // The trace only earns its columns where they are spare, and it is last
+    // in the row so dropping it costs nothing else its place.
+    let spark = width.saturating_sub(SENSOR_ROW_W).min(SENSOR_SPARK_W);
     lines.push(table_header(format!(
-        "   {:<11}{:<6}{:<6}{:>5}{:>7}",
-        "SENSOR", "KIND", "STATE", "BEAT", "5MIN"
+        "   {:<11}{:<6}{:<6}{:>5}{:>7}{}",
+        "SENSOR",
+        "KIND",
+        "STATE",
+        "BEAT",
+        "5MIN",
+        if spark >= SENSOR_SPARK_MIN {
+            "  15 MIN"
+        } else {
+            ""
+        }
     )));
 
     for sensor in &health.sensors {
@@ -361,7 +395,7 @@ fn sensor_lines<'a>(health: &HealthResponse, width: usize) -> Vec<Line<'a>> {
             (false, true) => ("off", WARN),
             (false, false) => ("DOWN", BAD),
         };
-        lines.push(Line::from(vec![
+        let mut spans = vec![
             Span::raw(format!("   {:<11}", clip(&sensor.sensor_id, 10))),
             dim(format!("{:<6}", clip(&sensor.sensor_kind, 5))),
             Span::styled(format!("{mark:<6}"), Style::default().fg(color)),
@@ -382,7 +416,32 @@ fn sensor_lines<'a>(health: &HealthResponse, width: usize) -> Vec<Line<'a>> {
                 }),
             ),
             dim(format!("{:>7}", compact_count(sensor.detections_5m))),
-        ]));
+        ];
+        // Scaled against this sensor's own busiest quarter-hour rather than
+        // against the other sensors': an SDR hearing four hundred aeroplanes
+        // and a Wi-Fi radio hearing two are both answering the only question
+        // asked of them here, which is whether they are still hearing what
+        // they were.
+        if spark >= SENSOR_SPARK_MIN {
+            if let Some(trace) = history.get(&sensor.sensor_id) {
+                // The gauge draws fractions; these are counts. Normalised
+                // against the sensor's own peak, so the shape is the answer
+                // rather than the magnitude -- handing it raw counts drew a
+                // solid bar for anything above one detection, which is every
+                // radio that is working.
+                let peak = trace.iter().copied().fold(0.0_f64, f64::max);
+                let scaled: Vec<f64> = if peak > 0.0 {
+                    trace.iter().map(|v| v / peak).collect()
+                } else {
+                    // Never heard anything. A flat floor says that; dividing
+                    // by the peak would be a divide by zero.
+                    vec![0.0; trace.len()]
+                };
+                spans.push(Span::raw("  "));
+                spans.extend(gauge::sparkline(&scaled, spark - 2, glyphs, Ramp::Cool));
+            }
+        }
+        lines.push(Line::from(spans));
         // The reason a sensor is down is the whole point of looking at this
         // pane, so it gets its own line rather than being truncated into the
         // margin.

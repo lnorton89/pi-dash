@@ -2204,3 +2204,141 @@ fn the_framebuffer_console_gets_a_whole_dashboard_at_every_width_too() {
         }
     }
 }
+
+/// The rendered sensor row for `id`, if the pane drew one.
+fn sensor_row(rows: &[String], id: &str) -> Option<String> {
+    rows.iter().find(|r| r.contains(id)).cloned()
+}
+
+#[test]
+fn a_sensor_going_quiet_looks_different_from_one_that_is_busy() {
+    // The failure this pane exists for. A radio whose antenna has worked loose
+    // keeps heartbeating, keeps reporting healthy, and its five-minute count
+    // slides away over a quarter of an hour -- which at any single glance is
+    // indistinguishable from an afternoon with nothing in the sky.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.classg.snapshot = busy_snapshot();
+
+    app.classg.sensor_history.insert(
+        "wifi-1".into(),
+        (0..30)
+            .map(|i| (430.0 - i as f64 * 14.0).max(0.0))
+            .collect(),
+    );
+    let fading = sensor_row(&render(&mut app, 200, 30), "wifi-1").expect("a sensor row");
+
+    app.classg
+        .sensor_history
+        .insert("wifi-1".into(), vec![300.0; 30]);
+    let steady = sensor_row(&render(&mut app, 200, 30), "wifi-1").expect("a sensor row");
+
+    assert_ne!(
+        fading, steady,
+        "a radio going quiet draws the same as one holding steady"
+    );
+    // The heading is on its own row, not on the sensor's.
+    assert!(contains(&render(&mut app, 200, 30), "15 MIN"));
+}
+
+#[test]
+fn a_sensor_that_has_never_heard_anything_draws_a_floor_not_a_panic() {
+    // Dividing by the peak is a divide by zero on a radio that has heard
+    // nothing, which is the state every sensor is in for its first half hour.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.classg.snapshot = busy_snapshot();
+    app.classg
+        .sensor_history
+        .insert("wifi-1".into(), vec![0.0; 30]);
+    let row = sensor_row(&render(&mut app, 200, 30), "wifi-1").expect("a sensor row");
+    assert!(!row.contains("NaN"), "{row}");
+}
+
+#[test]
+fn the_trace_is_dropped_on_a_pane_too_narrow_to_give_it_a_shape() {
+    // Four columns of sparkline is not a trend, it is decoration in the space
+    // the count needed.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.classg.snapshot = busy_snapshot();
+    app.classg
+        .sensor_history
+        .insert("wifi-1".into(), vec![100.0; 30]);
+    app.focus = Pane::Classg;
+    // Narrow enough that the pane itself is short of columns. At 70 the
+    // one-pane layout hands ClassG the whole terminal, which is not narrow at
+    // all -- the first version of this test asserted against a pane with
+    // twelve spare columns and proved nothing.
+    let rows = render(&mut app, 44, 30);
+    // Asserted on the braille rather than on the heading. Where the trace is
+    // dropped there was never room for the heading either, so its absence is
+    // satisfied by a clipped frame just as well as by the rule working -- a
+    // version of this test that checked for "15 MIN" passed with the rule
+    // removed entirely.
+    let row = sensor_row(&rows, "wifi-1").expect("the sensor row survives");
+    assert!(
+        !row.chars().any(|c| ('\u{2800}'..='\u{28FF}').contains(&c)),
+        "a trace was drawn into a pane with no room for it: {row}"
+    );
+}
+
+#[test]
+fn sensor_history_is_sampled_on_a_clock_not_on_every_poll() {
+    // detections_5m is a five-minute rolling count. At the three-second poll
+    // rate a full trace would span barely a minute of a window five times that
+    // long, and draw an almost flat line whatever the radio was doing.
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let start = std::time::Instant::now();
+
+    app.classg.record_sensor_rates(start);
+    let after_first = app.classg.sensor_history["wifi-1"].len();
+    assert_eq!(after_first, 1);
+
+    // Five seconds later is the same point in a five-minute window.
+    app.classg
+        .record_sensor_rates(start + std::time::Duration::from_secs(5));
+    assert_eq!(app.classg.sensor_history["wifi-1"].len(), 1, "too soon");
+
+    app.classg
+        .record_sensor_rates(start + std::time::Duration::from_secs(31));
+    assert_eq!(app.classg.sensor_history["wifi-1"].len(), 2);
+}
+
+#[test]
+fn a_sensor_that_goes_away_takes_its_trace_with_it() {
+    // A unit that has had adapters swapped should not accumulate traces for
+    // radios that are no longer fitted.
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let start = std::time::Instant::now();
+    app.classg.record_sensor_rates(start);
+    assert!(app.classg.sensor_history.contains_key("wifi-1"));
+
+    if let Some(health) = app.classg.snapshot.health.as_mut() {
+        health.sensors.clear();
+    }
+    app.classg
+        .record_sensor_rates(start + std::time::Duration::from_secs(31));
+    assert!(
+        app.classg.sensor_history.is_empty(),
+        "the trace outlived its sensor"
+    );
+}
+
+#[test]
+fn a_sensor_trace_cannot_grow_without_bound() {
+    let mut app = test_app();
+    app.classg.snapshot = busy_snapshot();
+    let start = std::time::Instant::now();
+    for tick in 0..200u64 {
+        app.classg
+            .record_sensor_rates(start + std::time::Duration::from_secs(tick * 31));
+    }
+    assert!(
+        app.classg.sensor_history["wifi-1"].len() <= 30,
+        "got {}",
+        app.classg.sensor_history["wifi-1"].len()
+    );
+}
