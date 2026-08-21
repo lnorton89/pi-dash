@@ -1197,10 +1197,15 @@ impl ClassgPane {
                 return;
             }
         }
-        self.last_history = Some(now);
+        // The clock is only advanced once there is something to record.
+        // Stamping it first meant an error snapshot arriving on a boundary
+        // consumed the slot and wrote nothing, and the healthy snapshot three
+        // seconds behind it was then turned away as too soon -- so an API that
+        // flaps costs the traces an extra half minute each time.
         let Some(health) = &self.snapshot.health else {
             return;
         };
+        self.last_history = Some(now);
         for sensor in &health.sensors {
             let trace = self
                 .sensor_history
@@ -1254,7 +1259,16 @@ fn poll_loop(
             polls.is_multiple_of(SLOW_EVERY),
             &slow,
         );
-        slow = snapshot.slow.clone();
+        // Only from a poll that got through. A /health failure returns a
+        // snapshot built from Default, so its slow tier is empty -- and taking
+        // that unconditionally threw away the carried one, blanking the store
+        // row, the session row and any capture or sweep until the next slow
+        // refresh up to nine polls later. That blink is the exact thing the
+        // Slow struct exists to prevent, and one timed-out request caused it
+        // for half a minute.
+        if snapshot.health.is_some() {
+            slow = snapshot.slow.clone();
+        }
         polls = polls.wrapping_add(1);
 
         // The API mints a NEW local-agent token every time it starts, and this
@@ -1731,6 +1745,98 @@ mod tests {
 
         let bare = Client::new("http://127.0.0.1:1".to_string(), None);
         assert_eq!(bare.poll(5, 5, true, &Slow::default()).credential, None);
+    }
+
+    #[test]
+    fn a_transient_health_failure_does_not_blank_the_slow_tier() {
+        // /health failing returns a snapshot built from Default, whose slow
+        // tier is empty. Taking that unconditionally threw away the carried
+        // one, so a single timed-out request blanked the store row, the
+        // session row and any capture or sweep for up to nine polls -- the
+        // exact blink the Slow struct exists to prevent.
+        let carried = Slow {
+            system: Some(SystemInfo {
+                build: SystemBuild {
+                    version: "0.4.1".to_string(),
+                    ..SystemBuild::default()
+                },
+                ..SystemInfo::default()
+            }),
+            ..Slow::default()
+        };
+
+        // What a failed poll produces.
+        let failed = Snapshot {
+            error: Some("timed out".to_string()),
+            ..Snapshot::default()
+        };
+        assert!(failed.health.is_none());
+        assert!(
+            failed.slow.system.is_none(),
+            "a failed poll carries no slow tier of its own"
+        );
+
+        // The rule the loop applies: keep what we had unless the poll got
+        // through.
+        let mut slow = carried.clone();
+        if failed.health.is_some() {
+            slow = failed.slow.clone();
+        }
+        assert!(
+            slow.system.is_some(),
+            "the carried slow tier was thrown away by a failed poll"
+        );
+
+        // And a poll that did get through replaces it.
+        let fresh = Snapshot {
+            health: Some(HealthResponse::default()),
+            ..Snapshot::default()
+        };
+        if fresh.health.is_some() {
+            slow = fresh.slow.clone();
+        }
+        assert!(slow.system.is_none());
+    }
+
+    #[test]
+    fn an_error_snapshot_does_not_burn_a_sensor_history_slot() {
+        // Stamping the clock before checking for health meant an error
+        // snapshot landing on a boundary consumed the slot and recorded
+        // nothing, and the healthy snapshot three seconds behind it was turned
+        // away as too soon. An API that flaps cost the traces half a minute
+        // each time.
+        let mut app = crate::app::App::new(crate::config::Config {
+            api: "http://127.0.0.1:1".to_string(),
+            ..crate::config::Config::default()
+        });
+        let start = Instant::now();
+
+        app.classg.snapshot = Snapshot {
+            error: Some("timed out".to_string()),
+            ..Snapshot::default()
+        };
+        app.classg.record_sensor_rates(start);
+        assert!(app.classg.sensor_history.is_empty());
+
+        // A healthy snapshot immediately afterwards still records.
+        app.classg.snapshot = Snapshot {
+            health: Some(HealthResponse {
+                sensors: vec![SensorHealth {
+                    sensor_id: "sdr-0".to_string(),
+                    detections_5m: 12,
+                    ..SensorHealth::default()
+                }],
+                ..HealthResponse::default()
+            }),
+            ..Snapshot::default()
+        };
+        app.classg
+            .record_sensor_rates(start + Duration::from_secs(3));
+        assert_eq!(
+            app.classg.sensor_history.get("sdr-0").map(Vec::len),
+            Some(1),
+            "the error snapshot spent the slot"
+        );
     }
 
     #[test]

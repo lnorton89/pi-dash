@@ -2419,3 +2419,36 @@ fn the_verdict_chip_budgets_the_address_as_it_is_drawn() {
         );
     }
 }
+
+#[test]
+fn the_net_trace_shows_a_shape_not_a_solid_bar() {
+    // `throughput` is bytes per second and `sparkline` clamps every sample to
+    // 0.0..=1.0, so handing it raw counts drew a full-height column for
+    // anything above one byte a second. On any box with an SSH session open
+    // that is a solid strip, and a capture starting -- the thing the window
+    // exists to reveal -- was invisible.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+    // A ramp: quiet, then busy. Every sample above 1 B/s, so unnormalised
+    // they all clamp to full height.
+    app.radios.throughput = (0..60).map(|i| i as f64 * 500.0).collect();
+
+    let rows = render(&mut app, 210, 24);
+    let heading = rows
+        .iter()
+        .find(|r| r.contains("net "))
+        .expect("the net heading row");
+    let trace: Vec<char> = heading
+        .chars()
+        .filter(|c| ('\u{2800}'..='\u{28FF}').contains(c))
+        .collect();
+    assert!(trace.len() >= 4, "no trace drawn: {heading}");
+
+    let distinct: std::collections::HashSet<&char> = trace.iter().collect();
+    assert!(
+        distinct.len() > 1,
+        "the trace is one repeated glyph, so it is a bar and not a shape: {heading}"
+    );
+}

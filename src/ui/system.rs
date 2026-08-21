@@ -215,12 +215,19 @@ fn net_column<'a>(
     let mut heading = vec![Span::styled("net", header_style())];
     if spark > 0 {
         heading.push(Span::raw(format!("{:<1$}", "", NET_NAME_W - 3)));
-        heading.extend(gauge::sparkline(
-            &radios.throughput,
-            spark,
-            glyphs,
-            Ramp::Cool,
-        ));
+        // Normalised against its own peak. `throughput` is bytes per second
+        // and `sparkline` clamps every sample to 0.0..=1.0, so handing it raw
+        // counts drew a full-height bar for anything above one byte a second
+        // -- a solid strip on any box with an SSH session open, and a capture
+        // starting was invisible. The sensor traces in the ClassG pane hit the
+        // same wall and were fixed this way; this column never was.
+        let peak = radios.throughput.iter().copied().fold(0.0_f64, f64::max);
+        let scaled: Vec<f64> = if peak > 0.0 {
+            radios.throughput.iter().map(|v| v / peak).collect()
+        } else {
+            vec![0.0; radios.throughput.len()]
+        };
+        heading.extend(gauge::sparkline(&scaled, spark, glyphs, Ramp::Cool));
     }
     let mut rows = vec![heading];
 

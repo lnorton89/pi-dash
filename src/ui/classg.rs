@@ -60,7 +60,11 @@ const SENSOR_ROW_W: usize = 3 + 11 + 6 + 6 + 5 + 7;
 /// for the number beside it, not the subject of the row.
 const SENSOR_SPARK_W: usize = 12;
 /// Below this a sparkline is too short to have a shape, so it is dropped.
-const SENSOR_SPARK_MIN: usize = 6;
+///
+/// Eight, not six, because the column's heading is the eight characters
+/// `"  15 MIN"`. At six and seven the trace fitted where its heading did not,
+/// and the unwrapped paragraph sliced it at the frame into `15 M`.
+const SENSOR_SPARK_MIN: usize = 8;
 
 pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let title = format!(" ClassG  {} ", app.config.api.trim_start_matches("http://"));
@@ -770,7 +774,13 @@ fn track_row<'a>(track: &Track, identity_w: usize) -> Line<'a> {
                 Style::default().fg(DIM)
             },
         ),
-        dim(format!("{:<6}", clip(&track.evidence_summary(), 5))),
+        // Never clipped. `Dx5.2k` cut to five characters is `Dx5.2`, which is
+        // not a shortened number but one a thousand times smaller -- the same
+        // failure the detection list documents and fixes for its `x16`.
+        dim(format!(
+            "{:<6}",
+            shorten_evidence(&track.evidence_summary(), 6)
+        )),
         dim(format!("{:>4} ", compact_count(track.detection_count))),
         dim(format!("{:>4}", age_of(track.last_seen.as_ref()))),
     ])
@@ -838,6 +848,34 @@ pub(crate) fn detection_request(page: Option<&DetectionPage>, room: usize) -> us
     (room.saturating_mul(fetched))
         .div_ceil(drawn)
         .clamp(1, MAX_DETECTION_ROWS)
+}
+
+/// Fits an evidence summary into `room`, dropping the class letter before the
+/// count loses any of itself.
+///
+/// `Ax402` fits; `Dx5.2k` is six characters and in a five-wide cell became
+/// `Dx5.2`. Given the choice between saying which class and saying how many,
+/// how many is the number being read -- a count that has lost its magnitude
+/// suffix is wrong by a factor of a thousand, and one that has lost its class
+/// is merely less useful.
+fn shorten_evidence(summary: &str, room: usize) -> String {
+    if summary.chars().count() <= room {
+        return summary.to_string();
+    }
+    if let Some((_, count)) = summary.split_once('x') {
+        if count.chars().count() <= room {
+            return count.to_string();
+        }
+    }
+    // Nothing rather than a clipped figure. Falling back to `clip` here is how
+    // this function reproduced, one level down, the very bug it exists to fix:
+    // `Dx999.9M` in five columns came out `Dx999`. An empty cell says "this
+    // did not fit"; `Dx999` says something false about the sky.
+    //
+    // Unreachable as things stand -- compact_count is bounded at six
+    // characters and the cell is six wide -- but the cell has been narrowed
+    // before and would narrow silently again.
+    String::new()
 }
 
 fn detection_lines<'a>(page: Option<&DetectionPage>, room: usize, width: usize) -> Vec<Line<'a>> {
@@ -992,4 +1030,24 @@ fn age_of(ts: Option<&FlexTime>) -> String {
 fn clock_of(ts: Option<&FlexTime>) -> String {
     ts.map(|t| t.0.with_timezone(&Local).format("%H:%M:%S").to_string())
         .unwrap_or_else(|| "  --:--".to_string())
+}
+
+#[cfg(test)]
+mod evidence_tests {
+    use super::shorten_evidence;
+
+    #[test]
+    fn an_evidence_count_loses_its_class_before_it_loses_its_magnitude() {
+        // `Dx5.2k` clipped to five characters is `Dx5.2` -- not a shorter way
+        // of writing 5200 but a number a thousand times smaller. A track with
+        // ninety minutes of ADS-B behind it read as five detections.
+        assert_eq!(shorten_evidence("Ax402", 6), "Ax402");
+        assert_eq!(shorten_evidence("Dx5.2k", 6), "Dx5.2k");
+        // One column short: the class goes, the count survives whole.
+        assert_eq!(shorten_evidence("Dx5.2k", 5), "5.2k");
+        // Too wide even for the bare count: blank, not a wrong number.
+        assert_eq!(shorten_evidence("Dx999.9M", 5), "");
+        // Nothing at all still does not panic.
+        assert_eq!(shorten_evidence("", 6), "");
+    }
 }
