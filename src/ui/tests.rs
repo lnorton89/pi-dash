@@ -1898,3 +1898,140 @@ fn an_empty_or_missing_page_asks_only_for_the_room() {
     // And a pane with no room still asks for something the API will accept.
     assert_eq!(detection_request(None, 0), 1);
 }
+
+/// A snapshot of a unit that is working, for the verdict tests.
+fn healthy_snapshot() -> Snapshot {
+    let mut snapshot = busy_snapshot();
+    snapshot.monitoring = Some(MonitoringState {
+        enabled: true,
+        ..MonitoringState::default()
+    });
+    if let Some(api) = snapshot.health.as_mut() {
+        api.status = "ok".to_string();
+        api.sensors.retain(|s| s.healthy || s.optional);
+    }
+    snapshot
+}
+
+#[test]
+fn the_header_states_the_verdict_so_a_glance_is_enough() {
+    // Every pane reports facts and none draws a conclusion, which is right for
+    // a pane and wrong for somebody walking past a screen.
+    let mut app = test_app();
+    with_load(&mut app);
+    app.classg.snapshot = healthy_snapshot();
+    assert!(contains(&render(&mut app, 150, 12), " ok"));
+
+    // The worst finding is named, not just counted: "degraded" sends you to
+    // read four panes, "degraded - recording is paused" sends you to one.
+    let mut paused = healthy_snapshot();
+    paused.monitoring = Some(MonitoringState {
+        enabled: false,
+        reason: Some("known local flight".into()),
+        discarded: 1204,
+        ..MonitoringState::default()
+    });
+    app.classg.snapshot = paused;
+    let rows = render(&mut app, 150, 12);
+    assert!(contains(&rows, "degraded"), "{}", rows[0]);
+    assert!(contains(&rows, "recording is paused"), "{}", rows[0]);
+
+    app.classg.snapshot = Snapshot {
+        error: Some("Connection refused".into()),
+        ..Snapshot::default()
+    };
+    assert!(contains(&render(&mut app, 150, 12), "down"));
+}
+
+#[test]
+fn the_header_verdict_cannot_disagree_with_the_one_cron_gets() {
+    // Both go through check::judge. Two verdicts that could drift apart would
+    // be worse than one of them not existing.
+    let mut app = test_app();
+    with_load(&mut app);
+    for snapshot in [
+        healthy_snapshot(),
+        busy_snapshot(),
+        Snapshot {
+            error: Some("Connection refused".into()),
+            ..Snapshot::default()
+        },
+    ] {
+        app.classg.snapshot = snapshot;
+        let findings = crate::check::judge(&app.health, &app.classg.snapshot);
+        let expected = findings
+            .iter()
+            .map(|f| f.verdict)
+            .max()
+            .unwrap_or(crate::check::Verdict::Ok);
+        assert!(
+            contains(&render(&mut app, 150, 12), expected.label()),
+            "the header does not say {:?}",
+            expected.label()
+        );
+    }
+}
+
+#[test]
+fn a_narrow_header_drops_the_detail_then_the_chip_but_never_the_clock() {
+    // A truncated verdict is one that could be read as the wrong one.
+    let mut app = test_app();
+    with_load(&mut app);
+    let mut paused = healthy_snapshot();
+    paused.monitoring = Some(MonitoringState {
+        enabled: false,
+        reason: Some("known local flight".into()),
+        discarded: 1204,
+        ..MonitoringState::default()
+    });
+    app.classg.snapshot = paused;
+
+    let wide = render(&mut app, 150, 12);
+    assert!(contains(&wide, "recording is paused"));
+
+    let middling = render(&mut app, 74, 12);
+    assert!(contains(&middling, "degraded"), "{}", middling[0]);
+    assert!(
+        !contains(&middling, "recording is paused"),
+        "{}",
+        middling[0]
+    );
+
+    // At every width the header fits and the clock survives, because the
+    // clock is the one thing that says the dashboard is still running.
+    for width in [40u16, 60, 74, 100, 150, 200] {
+        let rows = render(&mut app, width, 12);
+        assert!(
+            rows[0].chars().count() <= width as usize,
+            "header overran {width}: {}",
+            rows[0]
+        );
+        assert!(
+            rows[0].contains(':'),
+            "the clock went at {width}: {}",
+            rows[0]
+        );
+        // Never a fragment of one. At the widths where only three or four
+        // columns are left, clipping the word would put `deg` or `dow` on the
+        // header -- a verdict that can be read as the wrong one, which is
+        // worse than no verdict. Swept one column at a time because the
+        // window where that happens is a couple of characters wide.
+        assert!(
+            !rows[0].contains("deg") || rows[0].contains("degraded"),
+            "a sliced verdict at {width}: {}",
+            rows[0]
+        );
+        assert!(
+            !rows[0].contains("dow") || rows[0].contains("down"),
+            "a sliced verdict at {width}: {}",
+            rows[0]
+        );
+    }
+    for width in 40u16..=90 {
+        let row = &render(&mut app, width, 12)[0];
+        assert!(
+            !row.contains("deg") || row.contains("degraded"),
+            "a sliced verdict at {width}: {row}"
+        );
+    }
+}

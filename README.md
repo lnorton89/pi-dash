@@ -221,6 +221,12 @@ two samples ~0.7 s apart, because every rate here is a difference between two
 readings, and it always exits 0 — a snapshot's job is to render, and it
 rendered. For cron and CI, use `--check` below.
 
+The header states that same verdict, so a glance answers the question four
+panes of facts otherwise leave you to assemble: `ok`, or `degraded - recording
+is paused (known local flight)`, or `down - the API is not answering`. It goes
+through the same `judge` as `--check`, so the screen on the wall and the exit
+code in your crontab cannot drift apart.
+
 `--check` is the monitoring half. One line, and an exit code:
 
 | Code | Means |

@@ -114,6 +114,67 @@ fn draw_narrow(frame: &mut Frame, area: Rect, app: &mut App) {
     }
 }
 
+/// The one-line answer, in the space between the API address and the clock.
+///
+/// Every pane here reports facts and none of them draws a conclusion, which is
+/// the right division of labour for a pane and the wrong one for a glance. The
+/// whole thesis of this dashboard is that the interesting failures are silent
+/// -- a paused recording looks exactly like a quiet sky -- and the person it
+/// is built for is walking past a screen, not reading four panes in order.
+///
+/// It is `--check`'s judgement, not a second opinion: the same `judge` that
+/// decides the exit code cron branches on. Two verdicts that could disagree
+/// would be worse than none, and this way the thing on the wall and the thing
+/// in the crontab cannot drift apart.
+///
+/// The worst finding is named, not just counted. "degraded" sends you to read
+/// four panes; "degraded - recording is paused" sends you to one.
+fn verdict_chip<'a>(app: &App, width: usize) -> Vec<Span<'a>> {
+    let findings = crate::check::judge(&app.health, &app.classg.snapshot);
+    let verdict = findings
+        .iter()
+        .map(|f| f.verdict)
+        .max()
+        .unwrap_or(crate::check::Verdict::Ok);
+
+    // Room left after the host, the address and the clock, with a gap either
+    // side.
+    let used = 10 + app.host.chars().count() + 2 + app.config.api.chars().count();
+    let room = width.saturating_sub(used + CLOCK_W + 4);
+
+    // The whole word or nothing. Clipping it puts `deg` or `dow` on the header
+    // -- a verdict that reads as the wrong one, which is worse than no verdict
+    // at all. The window where that happens is only a couple of columns wide,
+    // which is exactly why it needs a rule rather than a guess.
+    let label = verdict.label();
+    if room < label.chars().count() {
+        return Vec::new();
+    }
+
+    let colour = match verdict {
+        crate::check::Verdict::Ok => OK,
+        crate::check::Verdict::Degraded => WARN,
+        crate::check::Verdict::Down => BAD,
+    };
+    let mut text = label.to_string();
+    if let Some(worst) = findings.iter().max_by_key(|f| f.verdict) {
+        let detailed = format!("{text} - {}", worst.note);
+        if detailed.chars().count() <= room {
+            text = detailed;
+        }
+    }
+    vec![
+        Span::raw("   "),
+        Span::styled(
+            crate::format::clip(&text, room),
+            Style::default().fg(colour).add_modifier(Modifier::BOLD),
+        ),
+    ]
+}
+
+/// `HH:MM:SS` and the space after it.
+const CLOCK_W: usize = 9;
+
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
     let left = Line::from(vec![
         Span::styled(
@@ -131,6 +192,8 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
             Style::default().fg(DIM),
         ),
     ]);
+    let mut left = left;
+    left.spans.extend(verdict_chip(app, area.width as usize));
     frame.render_widget(Paragraph::new(left), area);
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
