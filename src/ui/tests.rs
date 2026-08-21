@@ -2403,10 +2403,16 @@ fn the_verdict_chip_budgets_the_address_as_it_is_drawn() {
     let mut app = test_app();
     with_load(&mut app);
     app.classg.snapshot = healthy_snapshot();
+    // Pinned, because the header's width budget includes it and the real one
+    // is this machine's hostname. The first version of this test used it and
+    // passed here on `TORNADO` while failing on a CI runner whose name is five
+    // characters longer -- a test measuring columns must not take one of them
+    // from the environment.
+    app.host = "pisdr".to_string();
 
-    // Seven columns either side of the boundary: with the scheme counted, the
-    // chip needs 52 columns; drawn as it actually is, it needs 45.
-    for width in 46u16..=51 {
+    // Six columns either side of the boundary: with the scheme counted the
+    // chip needs 50 columns, drawn as it actually is it needs 43.
+    for width in 44u16..=49 {
         assert!(
             contains(&render(&mut app, width, 12), "ok"),
             "the verdict was dropped at {width} despite fitting"
