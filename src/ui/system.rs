@@ -160,11 +160,25 @@ fn disk_column<'a>(
             format!(" {pct:>3.0}%"),
             Style::default().fg(threshold_color(pct, 80.0, 92.0)),
         ));
-        spans.push(Span::raw(format!(
+        // "88.3G free of 117.0G" where the column can hold it, "88.3G free"
+        // where it cannot. The budget sized the meter but never bounded this,
+        // so a filesystem with wide figures -- a 232G stick reading
+        // "232.9G free of 232.9G" -- overran its column and pushed the net
+        // column off the pane entirely. Neither figure is ever clipped: a
+        // truncated size is a wrong number, so the *total* goes and the free
+        // figure, which is the one being read, stays whole.
+        let used_so_far = DISK_NAME_W + meter + 5;
+        let full = format!(
             "  {} free of {}",
             human_kb(fs.usage.avail_kb),
             human_kb(fs.usage.total_kb)
-        )));
+        );
+        let short = format!("  {} free", human_kb(fs.usage.avail_kb));
+        spans.push(Span::raw(if used_so_far + full.chars().count() <= width {
+            full
+        } else {
+            short
+        }));
         rows.push(spans);
     }
 

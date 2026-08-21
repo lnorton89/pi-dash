@@ -2035,3 +2035,71 @@ fn a_narrow_header_drops_the_detail_then_the_chip_but_never_the_clock() {
         );
     }
 }
+
+#[test]
+fn a_wide_disk_figure_does_not_push_the_net_column_off_the_pane() {
+    // The budget sized the disks meter but never bounded the text after it,
+    // so a 232G stick reading "232.9G free of 232.9G" overran its column and
+    // evicted the whole net column. One filesystem's figures should not cost
+    // a different box its row.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+
+    let rows = render(&mut app, 200, 24);
+    assert!(contains(&rows, "disks"), "{}", rows.join("\n"));
+    // `^7.8K` and not `eth0`: the Radios pane on the right lists eth0 too, so
+    // matching the bare name proves nothing about this column. The tx marker
+    // is written only here.
+    assert!(contains(&rows, "^7.8K"), "the net column was evicted");
+    // Shortened, not clipped: the free figure survives whole and the total is
+    // what goes.
+    assert!(contains(&rows, "232.9G free"), "{}", rows.join("\n"));
+    assert!(
+        !contains(&rows, "232.9G free of"),
+        "the column did not shorten, so it must have overrun:\n{}",
+        rows.join("\n")
+    );
+}
+
+#[test]
+fn the_disk_total_comes_back_once_the_column_can_hold_it() {
+    // Shortening is a response to width, not a permanent loss of the figure.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+    let rows = render(&mut app, 250, 24);
+    assert!(
+        contains(&rows, "88.3G free of 116.9G"),
+        "{}",
+        rows.join("\n")
+    );
+    assert!(contains(&rows, "^7.8K"), "and the net column still fits");
+}
+
+#[test]
+fn a_disk_figure_is_never_cut_off_mid_number() {
+    // A clipped size is a wrong number, which is the failure this pane spent
+    // three commits removing from the health row. `232.9G` must never render
+    // as `232.` or `232.9`.
+    let mut app = test_app();
+    with_load(&mut app);
+    with_filesystems(&mut app, 0);
+    with_interfaces(&mut app);
+    for width in 104u16..=260 {
+        for row in render(&mut app, width, 24) {
+            for figure in ["232.9G", "88.3G", "440M"] {
+                let stem = &figure[..figure.len() - 1];
+                if let Some(at) = row.find(stem) {
+                    let tail: String = row[at..].chars().take(figure.chars().count()).collect();
+                    assert!(
+                        tail == figure || !row[at..].starts_with(stem),
+                        "a sliced size at {width}: {row}"
+                    );
+                }
+            }
+        }
+    }
+}
