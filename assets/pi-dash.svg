@@ -100,7 +100,7 @@
 <text x="102.00" y="27.92" fill="#eef2f7" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">classg-pi</text>
 <text x="194.40" y="27.92" fill="#6e7787" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">127.0.0.1:8081</text>
 <text x="337.20" y="27.92" fill="#3fca7c" font-weight="bold" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">ok</text>
-<text x="1017.60" y="27.92" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">19:56:44 </text>
+<text x="1017.60" y="27.92" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">20:03:51 </text>
 <text x="18.00" y="44.02" fill="#3fb6cf" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">┌ </text>
 <text x="34.80" y="44.02" fill="#3fb6cf" font-weight="bold" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">1</text>
 <text x="43.20" y="44.02" fill="#c8d0da" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> System </text>
@@ -584,7 +584,7 @@
 <text x="547.20" y="671.92" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="671.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="671.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="671.92" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   19:56:41 Remote ID    </text>
+<text x="656.40" y="671.92" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   20:03:48 Remote ID    </text>
 <text x="866.40" y="671.92" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -52</text>
 <text x="908.40" y="671.92" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> ch149  </text>
 <text x="975.60" y="671.92" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">Mavic 3      </text>
@@ -597,7 +597,7 @@
 <text x="547.20" y="688.02" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="688.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="688.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="688.02" fill="#c8d0da" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   19:56:25 </text>
+<text x="656.40" y="688.02" fill="#c8d0da" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   20:03:32 </text>
 <text x="757.20" y="688.02" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">OUI/SSID     </text>
 <text x="866.40" y="688.02" fill="#e0b755" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -71</text>
 <text x="908.40" y="688.02" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">   ch6  </text>
@@ -605,7 +605,7 @@
 <text x="18.00" y="704.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="639.60" y="704.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="704.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="704.12" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   19:56:10 Control link </text>
+<text x="656.40" y="704.12" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   20:03:17 Control link </text>
 <text x="866.40" y="704.12" fill="#e0b755" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -64</text>
 <text x="908.40" y="704.12" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> 2437M  </text>
 <text x="1084.80" y="704.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>

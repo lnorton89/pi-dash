@@ -442,3 +442,6 @@ pub(crate) fn threshold_color(value: f64, warn: f64, bad: f64) -> Color {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod demo;

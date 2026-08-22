@@ -6,13 +6,15 @@ A one-window terminal dashboard for the Raspberry Pi running
 [ClassG](https://github.com/) — the three things a process monitor cannot tell
 you, plus a system summary so you do not need one.
 
+<!-- The picture and the text below it are both generated from src/ui/demo.rs:
+     PI_DASH_WRITE_DEMO=1 cargo test the_readme_demo -->
 ![pi-dash on a 128-column terminal: the System pane on the left with a CPU history graph, per-core meters, memory and the process table, and the Pi health, Radios & network and ClassG panes stacked down the right](assets/pi-dash.svg)
 
 <details>
 <summary>The same frame as text</summary>
 
 ```
- pi-dash  classg-pi  127.0.0.1:8081   ok                                                                               19:56:44
+ pi-dash  classg-pi  127.0.0.1:8081   ok                                                                               20:03:51
 ┌ 1 System ──────────────────────────────────────────────────── up 3d4h5m ┐┌ 2 Pi health ──────────────────────────────────────┐
 │                                        CPU ███▍░░░░░░░░░░  24%          ││  temp    58.4C ██████▎░░░░░  30-85C               │
 │                                        c0  ███▏░░░░░░░░░░  22%  ⣀⣀⣠⣄⣀⣀⣀⣀││  volts  0.856V core                               │
@@ -52,9 +54,9 @@ you, plus a system summary so you do not need one.
 │  2011    cron                                     3M     0.0 ░░░░░░░░░░ ││                                                   │
 │  2087    rsyslogd                                 5M     0.0 ░░░░░░░░░░ ││  detections 1284 total                            │
 │  2154    dbus-daemon                              4M     0.0 ░░░░░░░░░░ ││   TIME     CLASS          dBm  TUNE  ID           │
-│  2201    bluetoothd                               6M     0.0 ░░░░░░░░░░ ││   19:56:41 Remote ID      -52 ch149  Mavic 3      │
-│  2260    polkitd                                  9M     0.0 ░░░░░░░░░░ ││   19:56:25 OUI/SSID       -71   ch6               │
-│                                                                         ││   19:56:10 Control link   -64 2437M               │
+│  2201    bluetoothd                               6M     0.0 ░░░░░░░░░░ ││   20:03:48 Remote ID      -52 ch149  Mavic 3      │
+│  2260    polkitd                                  9M     0.0 ░░░░░░░░░░ ││   20:03:32 OUI/SSID       -71   ch6               │
+│                                                                         ││   20:03:17 Control link   -64 2437M               │
 │                                                                         ││                                                   │
 └─────────────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────┘
                                      q quit · r refresh · s sort by mem · f filter · ? help
