@@ -99,8 +99,8 @@
 <text x="18.00" y="27.92" fill="#0d1017" font-weight="bold" textLength="75.60" lengthAdjust="spacing" xml:space="preserve"> pi-dash </text>
 <text x="102.00" y="27.92" fill="#eef2f7" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">classg-pi</text>
 <text x="194.40" y="27.92" fill="#6e7787" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">127.0.0.1:8081</text>
-<text x="337.20" y="27.92" fill="#e0b755" font-weight="bold" textLength="495.60" lengthAdjust="spacing" xml:space="preserve">degraded - sensor sdr-1 is down (rtl_sdr: device not found)</text>
-<text x="1017.60" y="27.92" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">19:48:48 </text>
+<text x="337.20" y="27.92" fill="#3fca7c" font-weight="bold" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">ok</text>
+<text x="1017.60" y="27.92" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">19:56:44 </text>
 <text x="18.00" y="44.02" fill="#3fb6cf" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">┌ </text>
 <text x="34.80" y="44.02" fill="#3fb6cf" font-weight="bold" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">1</text>
 <text x="43.20" y="44.02" fill="#c8d0da" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> System </text>
@@ -200,9 +200,7 @@
 <text x="622.80" y="124.52" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
 <text x="631.20" y="124.52" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
 <text x="639.60" y="124.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="648.00" y="124.52" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  since  </text>
-<text x="732.00" y="124.52" fill="#e0b755" textLength="201.60" lengthAdjust="spacing" xml:space="preserve">under-voltage, throttled</text>
-<text x="933.60" y="124.52" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve">  (0x50000)</text>
+<text x="648.00" y="124.52" fill="#6e7787" textLength="218.40" lengthAdjust="spacing" xml:space="preserve">│  since  clean since boot</text>
 <text x="1084.80" y="124.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="140.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="43.20" y="140.62" fill="#5fff00" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">⣿⣿⣷⣶⣦⣤⣤⣤⣤⣤⣤⣶⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣀⣀⣀⣠⣤⣤⣶⣶⣶⣶⣶⣶</text>
@@ -465,9 +463,11 @@
 <text x="648.00" y="494.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="656.40" y="494.82" fill="#c8d0da" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">   sdr-1      </text>
 <text x="774.00" y="494.82" fill="#6e7787" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">sdr   </text>
-<text x="824.40" y="494.82" fill="#e05561" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">DOWN  </text>
-<text x="874.80" y="494.82" fill="#6e7787" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">    -      0</text>
-<text x="992.40" y="494.82" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀</text>
+<text x="824.40" y="494.82" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">ok    </text>
+<text x="874.80" y="494.82" fill="#6e7787" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   2s      4</text>
+<text x="992.40" y="494.82" fill="#005fd7" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣀⣀</text>
+<text x="1009.20" y="494.82" fill="#0087ff" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣠⣤</text>
+<text x="1026.00" y="494.82" fill="#00afff" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">⣤⣴⣶⣶⣶⣤</text>
 <text x="1084.80" y="494.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="510.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="510.92" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  511     </text>
@@ -478,7 +478,6 @@
 <text x="555.60" y="510.92" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
 <text x="639.60" y="510.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="510.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="510.92" fill="#e0b755" textLength="252.00" lengthAdjust="spacing" xml:space="preserve">     rtl_sdr: device not found</text>
 <text x="1084.80" y="510.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="527.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="527.02" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  598     </text>
@@ -488,7 +487,9 @@
 <text x="547.20" y="527.02" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
 <text x="555.60" y="527.02" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
 <text x="639.60" y="527.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="648.00" y="527.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="527.02" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">│  fusion    </text>
+<text x="757.20" y="527.02" fill="#3fca7c" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">connected</text>
+<text x="832.80" y="527.02" fill="#6e7787" textLength="151.20" lengthAdjust="spacing" xml:space="preserve">   last message 2s</text>
 <text x="1084.80" y="527.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="543.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="543.12" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  612     </text>
@@ -498,9 +499,7 @@
 <text x="547.20" y="543.12" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
 <text x="555.60" y="543.12" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
 <text x="639.60" y="543.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="648.00" y="543.12" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">│  fusion    </text>
-<text x="757.20" y="543.12" fill="#3fca7c" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">connected</text>
-<text x="832.80" y="543.12" fill="#6e7787" textLength="151.20" lengthAdjust="spacing" xml:space="preserve">   last message 2s</text>
+<text x="648.00" y="543.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="1084.80" y="543.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="559.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="559.22" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  877     </text>
@@ -511,6 +510,8 @@
 <text x="555.60" y="559.22" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
 <text x="639.60" y="559.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="559.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="559.22" fill="#c8d0da" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">  tracks</text>
+<text x="723.60" y="559.22" fill="#6e7787" textLength="58.80" lengthAdjust="spacing" xml:space="preserve"> 1 live</text>
 <text x="1084.80" y="559.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="575.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="575.32" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  63      </text>
@@ -521,8 +522,7 @@
 <text x="555.60" y="575.32" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
 <text x="639.60" y="575.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="575.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="575.32" fill="#c8d0da" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">  tracks</text>
-<text x="723.60" y="575.32" fill="#6e7787" textLength="58.80" lengthAdjust="spacing" xml:space="preserve"> 1 live</text>
+<text x="656.40" y="575.32" fill="#6e7787" font-weight="bold" textLength="420.00" lengthAdjust="spacing" xml:space="preserve">   STATE     CONF IDENTITY         EVID   DET SEEN</text>
 <text x="1084.80" y="575.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="591.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="591.42" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1401    </text>
@@ -532,7 +532,10 @@
 <text x="547.20" y="591.42" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="591.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="591.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="591.42" fill="#6e7787" font-weight="bold" textLength="420.00" lengthAdjust="spacing" xml:space="preserve">   STATE     CONF IDENTITY         EVID   DET SEEN</text>
+<text x="656.40" y="591.42" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">   CONFIRMED </text>
+<text x="765.60" y="591.42" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">0.82 </text>
+<text x="807.60" y="591.42" fill="#c8d0da" textLength="142.80" lengthAdjust="spacing" xml:space="preserve">Mavic 3          </text>
+<text x="950.40" y="591.42" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">Ax402  402   3s</text>
 <text x="1084.80" y="591.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="607.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="607.52" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1420    </text>
@@ -541,11 +544,7 @@
 <text x="496.80" y="607.52" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
 <text x="547.20" y="607.52" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="607.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="648.00" y="607.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="607.52" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">   CONFIRMED </text>
-<text x="765.60" y="607.52" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">0.82 </text>
-<text x="807.60" y="607.52" fill="#c8d0da" textLength="142.80" lengthAdjust="spacing" xml:space="preserve">Mavic 3          </text>
-<text x="950.40" y="607.52" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">Ax402  402   3s</text>
+<text x="648.00" y="607.52" fill="#6e7787" textLength="319.20" lengthAdjust="spacing" xml:space="preserve">│     120m agl  14m/s  -58dBm  held 4m</text>
 <text x="1084.80" y="607.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="623.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="623.62" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2011    </text>
@@ -554,7 +553,7 @@
 <text x="496.80" y="623.62" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
 <text x="547.20" y="623.62" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="623.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="648.00" y="623.62" fill="#6e7787" textLength="319.20" lengthAdjust="spacing" xml:space="preserve">│     120m agl  14m/s  -58dBm  held 4m</text>
+<text x="648.00" y="623.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="1084.80" y="623.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="639.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="639.72" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2087    </text>
@@ -564,6 +563,8 @@
 <text x="547.20" y="639.72" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="639.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="639.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="639.72" fill="#c8d0da" font-weight="bold" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">  detections</text>
+<text x="757.20" y="639.72" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve"> 1284 total</text>
 <text x="1084.80" y="639.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="655.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="655.82" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2154    </text>
@@ -573,8 +574,7 @@
 <text x="547.20" y="655.82" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="655.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="655.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="655.82" fill="#c8d0da" font-weight="bold" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">  detections</text>
-<text x="757.20" y="655.82" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve"> 1284 total</text>
+<text x="656.40" y="655.82" fill="#6e7787" font-weight="bold" textLength="428.40" lengthAdjust="spacing" xml:space="preserve">   TIME     CLASS          dBm  TUNE  ID           </text>
 <text x="1084.80" y="655.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="671.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="671.92" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2201    </text>
@@ -584,7 +584,10 @@
 <text x="547.20" y="671.92" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="671.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="671.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="671.92" fill="#6e7787" font-weight="bold" textLength="428.40" lengthAdjust="spacing" xml:space="preserve">   TIME     CLASS          dBm  TUNE  ID           </text>
+<text x="656.40" y="671.92" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   19:56:41 Remote ID    </text>
+<text x="866.40" y="671.92" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -52</text>
+<text x="908.40" y="671.92" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> ch149  </text>
+<text x="975.60" y="671.92" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">Mavic 3      </text>
 <text x="1084.80" y="671.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="688.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="26.40" y="688.02" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2260    </text>
@@ -594,18 +597,17 @@
 <text x="547.20" y="688.02" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
 <text x="639.60" y="688.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="688.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="688.02" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   19:48:45 Remote ID    </text>
-<text x="866.40" y="688.02" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -52</text>
-<text x="908.40" y="688.02" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> ch149  </text>
-<text x="975.60" y="688.02" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">Mavic 3      </text>
+<text x="656.40" y="688.02" fill="#c8d0da" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   19:56:25 </text>
+<text x="757.20" y="688.02" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">OUI/SSID     </text>
+<text x="866.40" y="688.02" fill="#e0b755" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -71</text>
+<text x="908.40" y="688.02" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">   ch6  </text>
 <text x="1084.80" y="688.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="704.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="639.60" y="704.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="648.00" y="704.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
-<text x="656.40" y="704.12" fill="#c8d0da" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   19:48:29 </text>
-<text x="757.20" y="704.12" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">OUI/SSID     </text>
-<text x="866.40" y="704.12" fill="#e0b755" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -71</text>
-<text x="908.40" y="704.12" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">   ch6  </text>
+<text x="656.40" y="704.12" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   19:56:10 Control link </text>
+<text x="866.40" y="704.12" fill="#e0b755" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -64</text>
+<text x="908.40" y="704.12" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> 2437M  </text>
 <text x="1084.80" y="704.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="18.00" y="720.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
 <text x="639.60" y="720.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>

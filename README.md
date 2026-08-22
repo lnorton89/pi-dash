@@ -12,13 +12,13 @@ you, plus a system summary so you do not need one.
 <summary>The same frame as text</summary>
 
 ```
- pi-dash  classg-pi  127.0.0.1:8081   degraded - sensor sdr-1 is down (rtl_sdr: device not found)                      19:48:48
+ pi-dash  classg-pi  127.0.0.1:8081   ok                                                                               19:56:44
 ┌ 1 System ──────────────────────────────────────────────────── up 3d4h5m ┐┌ 2 Pi health ──────────────────────────────────────┐
 │                                        CPU ███▍░░░░░░░░░░  24%          ││  temp    58.4C ██████▎░░░░░  30-85C               │
 │                                        c0  ███▏░░░░░░░░░░  22%  ⣀⣀⣠⣄⣀⣀⣀⣀││  volts  0.856V core                               │
 │  ⣷⣶                                    c1  ██░░░░░░░░░░░░  14%  ⣤⣀⣀⣀⣀⣀⣀⣀││  clock    1500 ██████████░░  83%  of 1800 MHz     │
 │  ⣿⣿              ⡀                     c2  █████▊░░░░░░░░  41%  ⣀⣀⣀⣀⣀⣀⣀⣀││  thrott OK  nothing right now                     │
-│  ⣿⣿              ⣿⣿⣿⣶⣶⣤⣤⣤              c3  █▎░░░░░░░░░░░░   9%  ⣀⣀⣀⣀⣀⣀⣀⣀││  since  under-voltage, throttled  (0x50000)       │
+│  ⣿⣿              ⣿⣿⣿⣶⣶⣤⣤⣤              c3  █▎░░░░░░░░░░░░   9%  ⣀⣀⣀⣀⣀⣀⣀⣀││  since  clean since boot                          │
 │  ⣿⣿⣷⣶⣦⣤⣤⣤⣤⣤⣤⣶⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣀⣀⣀⣠⣤⣤⣶⣶⣶⣶⣶⣶  load 0.52 0.31 0.20              ││  disk    21.0G ████▋░░░░░░░  39%                  │
 │  mem    █████████▏░░░░░░░░░░░░░░  38%  2.9G/7.6G                        ││  io     read 0 B/s      write 84.0 KB/s           │
 │  avail  ██████████████▉░░░░░░░░░  62%  4.7G                             ││  api    last good poll 0s ago                     │
@@ -41,20 +41,20 @@ you, plus a system summary so you do not need one.
 │  1163    classg-watchdog                          6M     0.2 ▏░░░░░░░░░ ││  sensors                                          │
 │  1       systemd                                 12M     0.1 ▏░░░░░░░░░ ││   SENSOR     KIND  STATE  BEAT   5MIN  15 MIN     │
 │  9       ksoftirqd/0                               0     0.1 ▏░░░░░░░░░ ││   wifi-1     wifi  ok       1s     12  ⣀⣀⣤⣤⣤⣴⣶⣿⣿⣿ │
-│  392     systemd-udevd                            7M     0.1 ▏░░░░░░░░░ ││   sdr-1      sdr   DOWN      -      0  ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀ │
-│  511     avahi-daemon                             3M     0.1 ▏░░░░░░░░░ ││     rtl_sdr: device not found                     │
-│  598     NetworkManager                          20M     0.1 ▏░░░░░░░░░ ││                                                   │
-│  612     wpa_supplicant                           8M     0.1 ▏░░░░░░░░░ ││  fusion    connected   last message 2s            │
-│  877     chronyd                                  4M     0.1 ▏░░░░░░░░░ ││                                                   │
-│  63      kworker/2:1-mm_percpu_wq                  0     0.1 ▏░░░░░░░░░ ││  tracks 1 live                                    │
-│  1401    docker-proxy                             9M     0.0 ░░░░░░░░░░ ││   STATE     CONF IDENTITY         EVID   DET SEEN │
-│  1420    redis-server                            15M     0.0 ░░░░░░░░░░ ││   CONFIRMED 0.82 Mavic 3          Ax402  402   3s │
-│  2011    cron                                     3M     0.0 ░░░░░░░░░░ ││     120m agl  14m/s  -58dBm  held 4m              │
-│  2087    rsyslogd                                 5M     0.0 ░░░░░░░░░░ ││                                                   │
-│  2154    dbus-daemon                              4M     0.0 ░░░░░░░░░░ ││  detections 1284 total                            │
-│  2201    bluetoothd                               6M     0.0 ░░░░░░░░░░ ││   TIME     CLASS          dBm  TUNE  ID           │
-│  2260    polkitd                                  9M     0.0 ░░░░░░░░░░ ││   19:48:45 Remote ID      -52 ch149  Mavic 3      │
-│                                                                         ││   19:48:29 OUI/SSID       -71   ch6               │
+│  392     systemd-udevd                            7M     0.1 ▏░░░░░░░░░ ││   sdr-1      sdr   ok       2s      4  ⣀⣀⣠⣤⣤⣴⣶⣶⣶⣤ │
+│  511     avahi-daemon                             3M     0.1 ▏░░░░░░░░░ ││                                                   │
+│  598     NetworkManager                          20M     0.1 ▏░░░░░░░░░ ││  fusion    connected   last message 2s            │
+│  612     wpa_supplicant                           8M     0.1 ▏░░░░░░░░░ ││                                                   │
+│  877     chronyd                                  4M     0.1 ▏░░░░░░░░░ ││  tracks 1 live                                    │
+│  63      kworker/2:1-mm_percpu_wq                  0     0.1 ▏░░░░░░░░░ ││   STATE     CONF IDENTITY         EVID   DET SEEN │
+│  1401    docker-proxy                             9M     0.0 ░░░░░░░░░░ ││   CONFIRMED 0.82 Mavic 3          Ax402  402   3s │
+│  1420    redis-server                            15M     0.0 ░░░░░░░░░░ ││     120m agl  14m/s  -58dBm  held 4m              │
+│  2011    cron                                     3M     0.0 ░░░░░░░░░░ ││                                                   │
+│  2087    rsyslogd                                 5M     0.0 ░░░░░░░░░░ ││  detections 1284 total                            │
+│  2154    dbus-daemon                              4M     0.0 ░░░░░░░░░░ ││   TIME     CLASS          dBm  TUNE  ID           │
+│  2201    bluetoothd                               6M     0.0 ░░░░░░░░░░ ││   19:56:41 Remote ID      -52 ch149  Mavic 3      │
+│  2260    polkitd                                  9M     0.0 ░░░░░░░░░░ ││   19:56:25 OUI/SSID       -71   ch6               │
+│                                                                         ││   19:56:10 Control link   -64 2437M               │
 │                                                                         ││                                                   │
 └─────────────────────────────────────────────────────────────────────────┘└───────────────────────────────────────────────────┘
                                      q quit · r refresh · s sort by mem · f filter · ? help
