@@ -1,0 +1,617 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1111 771" width="1111" height="771" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace" font-size="14" role="img" aria-label="pi-dash running on a Raspberry Pi: the System pane with a CPU history graph, per-core meters and the process table, beside the Pi health, Radios and ClassG panes">
+<rect width="100%" height="100%" rx="10" fill="#0d1017"/>
+<rect x="18.00" y="16.00" width="75.60" height="16.10" fill="#3fb6cf"/>
+<rect x="26.40" y="257.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="257.50" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="257.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="257.50" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="257.50" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="257.50" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="564.00" y="257.50" width="67.20" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="257.50" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="289.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="289.70" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="289.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="289.70" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="289.70" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="289.70" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="289.70" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="321.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="321.90" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="321.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="321.90" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="321.90" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="321.90" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="321.90" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="354.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="354.10" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="354.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="354.10" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="354.10" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="354.10" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="354.10" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="386.30" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="386.30" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="386.30" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="386.30" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="386.30" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="386.30" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="386.30" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="418.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="418.50" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="418.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="418.50" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="418.50" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="418.50" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="418.50" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="450.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="450.70" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="450.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="450.70" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="450.70" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="450.70" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="450.70" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="482.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="482.90" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="482.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="482.90" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="482.90" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="482.90" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="482.90" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="515.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="515.10" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="515.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="515.10" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="515.10" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="515.10" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="515.10" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="547.30" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="547.30" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="547.30" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="547.30" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="547.30" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="555.60" y="547.30" width="75.60" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="547.30" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="579.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="579.50" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="579.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="579.50" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="579.50" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="579.50" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="611.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="611.70" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="611.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="611.70" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="611.70" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="611.70" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="643.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="643.90" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="643.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="643.90" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="643.90" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="643.90" width="8.40" height="16.10" fill="#1c1c1c"/>
+<rect x="26.40" y="676.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="110.40" y="676.10" width="302.40" height="16.10" fill="#1c1c1c"/>
+<rect x="412.80" y="676.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="496.80" y="676.10" width="50.40" height="16.10" fill="#1c1c1c"/>
+<rect x="547.20" y="676.10" width="84.00" height="16.10" fill="#1c1c1c"/>
+<rect x="631.20" y="676.10" width="8.40" height="16.10" fill="#1c1c1c"/>
+<text x="18.00" y="27.92" fill="#0d1017" font-weight="bold" textLength="75.60" lengthAdjust="spacing" xml:space="preserve"> pi-dash </text>
+<text x="102.00" y="27.92" fill="#eef2f7" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">classg-pi</text>
+<text x="194.40" y="27.92" fill="#6e7787" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">127.0.0.1:8081</text>
+<text x="337.20" y="27.92" fill="#e0b755" font-weight="bold" textLength="495.60" lengthAdjust="spacing" xml:space="preserve">degraded - sensor sdr-1 is down (rtl_sdr: device not found)</text>
+<text x="1017.60" y="27.92" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">19:48:48 </text>
+<text x="18.00" y="44.02" fill="#3fb6cf" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">┌ </text>
+<text x="34.80" y="44.02" fill="#3fb6cf" font-weight="bold" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">1</text>
+<text x="43.20" y="44.02" fill="#c8d0da" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> System </text>
+<text x="110.40" y="44.02" fill="#3fb6cf" textLength="436.80" lengthAdjust="spacing" xml:space="preserve">────────────────────────────────────────────────────</text>
+<text x="547.20" y="44.02" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve"> up 3d4h5m </text>
+<text x="639.60" y="44.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">┐</text>
+<text x="648.00" y="44.02" fill="#6e7787" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">┌ </text>
+<text x="664.80" y="44.02" fill="#6e7787" font-weight="bold" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">2 Pi health </text>
+<text x="765.60" y="44.02" fill="#6e7787" textLength="327.60" lengthAdjust="spacing" xml:space="preserve">──────────────────────────────────────┐</text>
+<text x="18.00" y="60.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="362.40" y="60.12" fill="#6e7787" font-weight="bold" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">CPU </text>
+<text x="396.00" y="60.12" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="404.40" y="60.12" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="412.80" y="60.12" fill="#87ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">█▍</text>
+<text x="429.60" y="60.12" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="513.60" y="60.12" fill="#3fca7c" font-weight="bold" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  24%</text>
+<text x="639.60" y="60.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="60.12" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  temp   </text>
+<text x="732.00" y="60.12" fill="#3fca7c" font-weight="bold" textLength="58.80" lengthAdjust="spacing" xml:space="preserve"> 58.4C </text>
+<text x="790.80" y="60.12" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="799.20" y="60.12" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="807.60" y="60.12" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="816.00" y="60.12" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="824.40" y="60.12" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="832.80" y="60.12" fill="#ffff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">█▎</text>
+<text x="849.60" y="60.12" fill="#303030" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">░░░░░</text>
+<text x="891.60" y="60.12" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">  30-85C</text>
+<text x="1084.80" y="60.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="76.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="362.40" y="76.22" fill="#6e7787" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">c0  </text>
+<text x="396.00" y="76.22" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="404.40" y="76.22" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="412.80" y="76.22" fill="#87ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">█▏</text>
+<text x="429.60" y="76.22" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="513.60" y="76.22" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  22% </text>
+<text x="572.40" y="76.22" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="580.80" y="76.22" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="589.20" y="76.22" fill="#d7ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣠⣄</text>
+<text x="606.00" y="76.22" fill="#afff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣀⣀</text>
+<text x="622.80" y="76.22" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="631.20" y="76.22" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="639.60" y="76.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="76.22" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  volts  </text>
+<text x="732.00" y="76.22" fill="#c8d0da" font-weight="bold" textLength="58.80" lengthAdjust="spacing" xml:space="preserve">0.856V </text>
+<text x="790.80" y="76.22" fill="#6e7787" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">core</text>
+<text x="1084.80" y="76.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="92.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="43.20" y="92.32" fill="#ffd700" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣷⣶</text>
+<text x="362.40" y="92.32" fill="#6e7787" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">c1  </text>
+<text x="396.00" y="92.32" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="404.40" y="92.32" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="412.80" y="92.32" fill="#303030" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░░░</text>
+<text x="513.60" y="92.32" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  14% </text>
+<text x="572.40" y="92.32" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣤</text>
+<text x="580.80" y="92.32" fill="#afff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣀⣀</text>
+<text x="597.60" y="92.32" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="606.00" y="92.32" fill="#5fff00" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">⣀⣀⣀⣀</text>
+<text x="639.60" y="92.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="92.32" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  clock  </text>
+<text x="732.00" y="92.32" fill="#c8d0da" font-weight="bold" textLength="58.80" lengthAdjust="spacing" xml:space="preserve">  1500 </text>
+<text x="790.80" y="92.32" fill="#0000af" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="807.60" y="92.32" fill="#005fd7" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="824.40" y="92.32" fill="#0087ff" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="841.20" y="92.32" fill="#00afff" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="858.00" y="92.32" fill="#00d7ff" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="874.80" y="92.32" fill="#303030" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">░░</text>
+<text x="891.60" y="92.32" fill="#6e7787" textLength="151.20" lengthAdjust="spacing" xml:space="preserve">  83%  of 1800 MHz</text>
+<text x="1084.80" y="92.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="108.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="43.20" y="108.42" fill="#d7ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣿⣿</text>
+<text x="177.60" y="108.42" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⡀</text>
+<text x="362.40" y="108.42" fill="#6e7787" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">c2  </text>
+<text x="396.00" y="108.42" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="404.40" y="108.42" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="412.80" y="108.42" fill="#87ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="429.60" y="108.42" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="438.00" y="108.42" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▊</text>
+<text x="446.40" y="108.42" fill="#303030" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░</text>
+<text x="513.60" y="108.42" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  41% </text>
+<text x="572.40" y="108.42" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="580.80" y="108.42" fill="#5fff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣀⣀</text>
+<text x="597.60" y="108.42" fill="#87ff00" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">⣀⣀⣀⣀⣀</text>
+<text x="639.60" y="108.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="108.42" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  thrott </text>
+<text x="732.00" y="108.42" fill="#3fca7c" font-weight="bold" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">OK</text>
+<text x="748.80" y="108.42" fill="#6e7787" textLength="159.60" lengthAdjust="spacing" xml:space="preserve">  nothing right now</text>
+<text x="1084.80" y="108.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="124.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="43.20" y="124.52" fill="#afff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣿⣿</text>
+<text x="177.60" y="124.52" fill="#afff00" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">⣿⣿⣿⣶⣶⣤⣤⣤</text>
+<text x="362.40" y="124.52" fill="#6e7787" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">c3  </text>
+<text x="396.00" y="124.52" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="404.40" y="124.52" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▎</text>
+<text x="412.80" y="124.52" fill="#303030" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░░░</text>
+<text x="513.60" y="124.52" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">   9% </text>
+<text x="572.40" y="124.52" fill="#87ff00" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">⣀⣀⣀⣀⣀⣀</text>
+<text x="622.80" y="124.52" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="631.20" y="124.52" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣀</text>
+<text x="639.60" y="124.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="124.52" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  since  </text>
+<text x="732.00" y="124.52" fill="#e0b755" textLength="201.60" lengthAdjust="spacing" xml:space="preserve">under-voltage, throttled</text>
+<text x="933.60" y="124.52" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve">  (0x50000)</text>
+<text x="1084.80" y="124.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="140.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="43.20" y="140.62" fill="#5fff00" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">⣿⣿⣷⣶⣦⣤⣤⣤⣤⣤⣤⣶⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣀⣀⣀⣠⣤⣤⣶⣶⣶⣶⣶⣶</text>
+<text x="362.40" y="140.62" fill="#6e7787" textLength="159.60" lengthAdjust="spacing" xml:space="preserve">load 0.52 0.31 0.20</text>
+<text x="639.60" y="140.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="140.62" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">│  disk   </text>
+<text x="732.00" y="140.62" fill="#c8d0da" font-weight="bold" textLength="58.80" lengthAdjust="spacing" xml:space="preserve"> 21.0G </text>
+<text x="790.80" y="140.62" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="799.20" y="140.62" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="807.60" y="140.62" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="816.00" y="140.62" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="824.40" y="140.62" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▋</text>
+<text x="832.80" y="140.62" fill="#303030" textLength="58.80" lengthAdjust="spacing" xml:space="preserve">░░░░░░░</text>
+<text x="891.60" y="140.62" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  39%</text>
+<text x="1084.80" y="140.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="156.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="156.72" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">  mem    </text>
+<text x="102.00" y="156.72" fill="#00ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="118.80" y="156.72" fill="#5fff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="135.60" y="156.72" fill="#87ff00" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">██</text>
+<text x="152.40" y="156.72" fill="#afff00" textLength="25.20" lengthAdjust="spacing" xml:space="preserve">███</text>
+<text x="177.60" y="156.72" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="186.00" y="156.72" fill="#303030" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░░░░░</text>
+<text x="303.60" y="156.72" fill="#3fca7c" font-weight="bold" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  38%</text>
+<text x="345.60" y="156.72" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve">  2.9G/7.6G</text>
+<text x="639.60" y="156.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="156.72" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">│  io     read </text>
+<text x="774.00" y="156.72" fill="#c8d0da" textLength="92.40" lengthAdjust="spacing" xml:space="preserve">0 B/s      </text>
+<text x="866.40" y="156.72" fill="#6e7787" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">write </text>
+<text x="916.80" y="156.72" fill="#c8d0da" textLength="168.00" lengthAdjust="spacing" xml:space="preserve">84.0 KB/s           </text>
+<text x="1084.80" y="156.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="172.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="172.82" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">  avail  </text>
+<text x="102.00" y="172.82" fill="#0000af" textLength="25.20" lengthAdjust="spacing" xml:space="preserve">███</text>
+<text x="127.20" y="172.82" fill="#005fd7" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">████</text>
+<text x="160.80" y="172.82" fill="#0087ff" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">█████</text>
+<text x="202.80" y="172.82" fill="#00afff" textLength="25.20" lengthAdjust="spacing" xml:space="preserve">██▉</text>
+<text x="228.00" y="172.82" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="303.60" y="172.82" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve">  62%  4.7G</text>
+<text x="639.60" y="172.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="172.82" fill="#6e7787" textLength="260.40" lengthAdjust="spacing" xml:space="preserve">│  api    last good poll 0s ago</text>
+<text x="1084.80" y="172.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="188.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="188.92" fill="#6e7787" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">  cache  </text>
+<text x="102.00" y="188.92" fill="#0000af" textLength="25.20" lengthAdjust="spacing" xml:space="preserve">███</text>
+<text x="127.20" y="188.92" fill="#005fd7" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">███▎</text>
+<text x="160.80" y="188.92" fill="#303030" textLength="142.80" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░░░░░░░░</text>
+<text x="303.60" y="188.92" fill="#6e7787" textLength="193.20" lengthAdjust="spacing" xml:space="preserve">  26%  2.0G reclaimable</text>
+<text x="639.60" y="188.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="188.92" fill="#6e7787" textLength="445.20" lengthAdjust="spacing" xml:space="preserve">└───────────────────────────────────────────────────┘</text>
+<text x="18.00" y="205.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="205.02" fill="#6e7787" textLength="310.80" lengthAdjust="spacing" xml:space="preserve">  swap   off   214 threads, 2 running</text>
+<text x="639.60" y="205.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="205.02" fill="#6e7787" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">┌ </text>
+<text x="664.80" y="205.02" fill="#6e7787" font-weight="bold" textLength="159.60" lengthAdjust="spacing" xml:space="preserve">3 Radios &amp; network </text>
+<text x="824.40" y="205.02" fill="#6e7787" textLength="268.80" lengthAdjust="spacing" xml:space="preserve">───────────────────────────────┐</text>
+<text x="18.00" y="221.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="639.60" y="221.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="221.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="221.12" fill="#6e7787" font-weight="bold" textLength="378.00" lengthAdjust="spacing" xml:space="preserve">  IFACE   LINK  RX      TX      MODE    CH   </text>
+<text x="1084.80" y="221.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="237.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="237.22" fill="#6e7787" font-weight="bold" textLength="470.40" lengthAdjust="spacing" xml:space="preserve">  PID     COMMAND                                 MEM   </text>
+<text x="496.80" y="237.22" fill="#3fb6cf" font-weight="bold" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">CPU%</text>
+<text x="530.40" y="237.22" fill="#6e7787" font-weight="bold" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1-28/214</text>
+<text x="639.60" y="237.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="237.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="237.22" fill="#c8d0da" font-weight="bold" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  wlan1   </text>
+<text x="740.40" y="237.22" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">up    </text>
+<text x="790.80" y="237.22" fill="#c8d0da" textLength="134.40" lengthAdjust="spacing" xml:space="preserve">1.2M    0B      </text>
+<text x="925.20" y="237.22" fill="#3fca7c" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">monitor </text>
+<text x="992.40" y="237.22" fill="#6e7787" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">6    </text>
+<text x="1084.80" y="237.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="253.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="253.32" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1284    </text>
+<text x="110.40" y="253.32" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">classg-api                          </text>
+<text x="412.80" y="253.32" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">   120M   </text>
+<text x="496.80" y="253.32" fill="#e0b755" textLength="50.40" lengthAdjust="spacing" xml:space="preserve"> 41.2 </text>
+<text x="547.20" y="253.32" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="555.60" y="253.32" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="564.00" y="253.32" fill="#87ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="572.40" y="253.32" fill="#afff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="580.80" y="253.32" fill="#d7ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="589.20" y="253.32" fill="#303030" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">░░░░░</text>
+<text x="639.60" y="253.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="253.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="253.32" fill="#c8d0da" font-weight="bold" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  eth0    </text>
+<text x="740.40" y="253.32" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">up    </text>
+<text x="790.80" y="253.32" fill="#c8d0da" textLength="201.60" lengthAdjust="spacing" xml:space="preserve">4.0K    2.0K            </text>
+<text x="1084.80" y="253.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="269.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="269.42" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1290    </text>
+<text x="110.40" y="269.42" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">classg_wifi                         </text>
+<text x="412.80" y="269.42" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    64M   </text>
+<text x="496.80" y="269.42" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve"> 18.7 </text>
+<text x="547.20" y="269.42" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">█</text>
+<text x="555.60" y="269.42" fill="#5fff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▉</text>
+<text x="564.00" y="269.42" fill="#303030" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░</text>
+<text x="639.60" y="269.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="269.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="1084.80" y="269.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="285.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="285.52" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1301    </text>
+<text x="110.40" y="285.52" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">classg-fusion                       </text>
+<text x="412.80" y="285.52" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     9M   </text>
+<text x="496.80" y="285.52" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  4.1 </text>
+<text x="547.20" y="285.52" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▍</text>
+<text x="555.60" y="285.52" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="285.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="285.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="285.52" fill="#c8d0da" font-weight="bold" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">  USB radios</text>
+<text x="1084.80" y="285.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="301.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="301.62" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  902     </text>
+<text x="110.40" y="301.62" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">dockerd                             </text>
+<text x="412.80" y="301.62" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">   206M   </text>
+<text x="496.80" y="301.62" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  1.4 </text>
+<text x="547.20" y="301.62" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="301.62" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="301.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="301.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="301.62" fill="#6e7787" font-weight="bold" textLength="168.00" lengthAdjust="spacing" xml:space="preserve">  VID:PID     DEVICE</text>
+<text x="1084.80" y="301.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="317.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="317.72" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1337    </text>
+<text x="110.40" y="317.72" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">pi-dash                             </text>
+<text x="412.80" y="317.72" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     7M   </text>
+<text x="496.80" y="317.72" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.9 </text>
+<text x="547.20" y="317.72" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="317.72" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="317.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="317.72" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">│  0e8d:7961   </text>
+<text x="774.00" y="317.72" fill="#c8d0da" textLength="310.80" lengthAdjust="spacing" xml:space="preserve">MediaTek ALFA AWUS036AXML            </text>
+<text x="1084.80" y="317.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="333.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="333.82" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  704     </text>
+<text x="110.40" y="333.82" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">containerd                          </text>
+<text x="412.80" y="333.82" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    70M   </text>
+<text x="496.80" y="333.82" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.7 </text>
+<text x="547.20" y="333.82" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="333.82" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="333.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="333.82" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">│  0bda:2838   </text>
+<text x="774.00" y="333.82" fill="#c8d0da" textLength="310.80" lengthAdjust="spacing" xml:space="preserve">Realtek RTL2838 (RTL-SDR V4)         </text>
+<text x="1084.80" y="333.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="349.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="349.92" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1312    </text>
+<text x="110.40" y="349.92" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">classg-web                          </text>
+<text x="412.80" y="349.92" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    42M   </text>
+<text x="496.80" y="349.92" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.6 </text>
+<text x="547.20" y="349.92" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="349.92" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="349.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="349.92" fill="#6e7787" textLength="445.20" lengthAdjust="spacing" xml:space="preserve">└───────────────────────────────────────────────────┘</text>
+<text x="18.00" y="366.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="366.02" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  448     </text>
+<text x="110.40" y="366.02" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">systemd-journald                    </text>
+<text x="412.80" y="366.02" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    18M   </text>
+<text x="496.80" y="366.02" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.5 </text>
+<text x="547.20" y="366.02" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="366.02" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="366.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="366.02" fill="#6e7787" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">┌ </text>
+<text x="664.80" y="366.02" fill="#6e7787" font-weight="bold" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">4 ClassG  127.0.0.1:8081 </text>
+<text x="874.80" y="366.02" fill="#6e7787" textLength="218.40" lengthAdjust="spacing" xml:space="preserve">─────────────────────────┐</text>
+<text x="18.00" y="382.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="382.12" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  61      </text>
+<text x="110.40" y="382.12" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">kworker/1:2-events                  </text>
+<text x="412.80" y="382.12" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">      0   </text>
+<text x="496.80" y="382.12" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.4 </text>
+<text x="547.20" y="382.12" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="382.12" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="382.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="382.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="382.12" fill="#3fca7c" font-weight="bold" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">  ok</text>
+<text x="690.00" y="382.12" fill="#6e7787" textLength="243.60" lengthAdjust="spacing" xml:space="preserve">   up 75h 25m   0.4.1+a1b2c3d</text>
+<text x="1084.80" y="382.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="398.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="398.22" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1198    </text>
+<text x="110.40" y="398.22" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">sshd                                </text>
+<text x="412.80" y="398.22" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    11M   </text>
+<text x="496.80" y="398.22" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.3 </text>
+<text x="547.20" y="398.22" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="398.22" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="398.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="398.22" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">│  store     </text>
+<text x="757.20" y="398.22" fill="#c8d0da" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">libsql      </text>
+<text x="858.00" y="398.22" fill="#6e7787" textLength="159.60" lengthAdjust="spacing" xml:space="preserve">11.5G free of 28.9G</text>
+<text x="1084.80" y="398.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="414.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="414.32" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  236     </text>
+<text x="110.40" y="414.32" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">rtl_433                             </text>
+<text x="412.80" y="414.32" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     5M   </text>
+<text x="496.80" y="414.32" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.2 </text>
+<text x="547.20" y="414.32" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="414.32" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="414.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="414.32" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">│  recording </text>
+<text x="757.20" y="414.32" fill="#3fca7c" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">on</text>
+<text x="774.00" y="414.32" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">   since 3d ago</text>
+<text x="1084.80" y="414.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="430.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="430.42" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1155    </text>
+<text x="110.40" y="430.42" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">classg-deploy-agent                 </text>
+<text x="412.80" y="430.42" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    14M   </text>
+<text x="496.80" y="430.42" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.2 </text>
+<text x="547.20" y="430.42" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="430.42" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="430.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="430.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="1084.80" y="430.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="446.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="446.52" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1163    </text>
+<text x="110.40" y="446.52" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">classg-watchdog                     </text>
+<text x="412.80" y="446.52" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     6M   </text>
+<text x="496.80" y="446.52" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.2 </text>
+<text x="547.20" y="446.52" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="446.52" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="446.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="446.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="446.52" fill="#c8d0da" font-weight="bold" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">  sensors</text>
+<text x="1084.80" y="446.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="462.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="462.62" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1       </text>
+<text x="110.40" y="462.62" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">systemd                             </text>
+<text x="412.80" y="462.62" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    12M   </text>
+<text x="496.80" y="462.62" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="462.62" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="462.62" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="462.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="462.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="462.62" fill="#6e7787" font-weight="bold" textLength="386.40" lengthAdjust="spacing" xml:space="preserve">   SENSOR     KIND  STATE  BEAT   5MIN  15 MIN</text>
+<text x="1084.80" y="462.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="478.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="478.72" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  9       </text>
+<text x="110.40" y="478.72" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">ksoftirqd/0                         </text>
+<text x="412.80" y="478.72" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">      0   </text>
+<text x="496.80" y="478.72" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="478.72" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="478.72" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="478.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="478.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="478.72" fill="#c8d0da" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">   wifi-1     </text>
+<text x="774.00" y="478.72" fill="#6e7787" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">wifi  </text>
+<text x="824.40" y="478.72" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">ok    </text>
+<text x="874.80" y="478.72" fill="#6e7787" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   1s     12</text>
+<text x="992.40" y="478.72" fill="#0087ff" textLength="33.60" lengthAdjust="spacing" xml:space="preserve">⣀⣀⣤⣤</text>
+<text x="1026.00" y="478.72" fill="#00afff" textLength="16.80" lengthAdjust="spacing" xml:space="preserve">⣤⣴</text>
+<text x="1042.80" y="478.72" fill="#00d7ff" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">⣶</text>
+<text x="1051.20" y="478.72" fill="#00ffff" textLength="25.20" lengthAdjust="spacing" xml:space="preserve">⣿⣿⣿</text>
+<text x="1084.80" y="478.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="494.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="494.82" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  392     </text>
+<text x="110.40" y="494.82" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">systemd-udevd                       </text>
+<text x="412.80" y="494.82" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     7M   </text>
+<text x="496.80" y="494.82" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="494.82" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="494.82" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="494.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="494.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="494.82" fill="#c8d0da" textLength="117.60" lengthAdjust="spacing" xml:space="preserve">   sdr-1      </text>
+<text x="774.00" y="494.82" fill="#6e7787" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">sdr   </text>
+<text x="824.40" y="494.82" fill="#e05561" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">DOWN  </text>
+<text x="874.80" y="494.82" fill="#6e7787" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">    -      0</text>
+<text x="992.40" y="494.82" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀</text>
+<text x="1084.80" y="494.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="510.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="510.92" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  511     </text>
+<text x="110.40" y="510.92" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">avahi-daemon                        </text>
+<text x="412.80" y="510.92" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     3M   </text>
+<text x="496.80" y="510.92" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="510.92" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="510.92" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="510.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="510.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="510.92" fill="#e0b755" textLength="252.00" lengthAdjust="spacing" xml:space="preserve">     rtl_sdr: device not found</text>
+<text x="1084.80" y="510.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="527.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="527.02" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  598     </text>
+<text x="110.40" y="527.02" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">NetworkManager                      </text>
+<text x="412.80" y="527.02" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    20M   </text>
+<text x="496.80" y="527.02" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="527.02" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="527.02" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="527.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="527.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="1084.80" y="527.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="543.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="543.12" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  612     </text>
+<text x="110.40" y="543.12" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">wpa_supplicant                      </text>
+<text x="412.80" y="543.12" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     8M   </text>
+<text x="496.80" y="543.12" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="543.12" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="543.12" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="543.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="543.12" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">│  fusion    </text>
+<text x="757.20" y="543.12" fill="#3fca7c" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">connected</text>
+<text x="832.80" y="543.12" fill="#6e7787" textLength="151.20" lengthAdjust="spacing" xml:space="preserve">   last message 2s</text>
+<text x="1084.80" y="543.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="559.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="559.22" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  877     </text>
+<text x="110.40" y="559.22" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">chronyd                             </text>
+<text x="412.80" y="559.22" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     4M   </text>
+<text x="496.80" y="559.22" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="559.22" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="559.22" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="559.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="559.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="1084.80" y="559.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="575.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="575.32" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  63      </text>
+<text x="110.40" y="575.32" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">kworker/2:1-mm_percpu_wq            </text>
+<text x="412.80" y="575.32" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">      0   </text>
+<text x="496.80" y="575.32" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.1 </text>
+<text x="547.20" y="575.32" fill="#00ff00" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">▏</text>
+<text x="555.60" y="575.32" fill="#303030" textLength="75.60" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░</text>
+<text x="639.60" y="575.32" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="575.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="575.32" fill="#c8d0da" font-weight="bold" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">  tracks</text>
+<text x="723.60" y="575.32" fill="#6e7787" textLength="58.80" lengthAdjust="spacing" xml:space="preserve"> 1 live</text>
+<text x="1084.80" y="575.32" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="591.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="591.42" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1401    </text>
+<text x="110.40" y="591.42" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">docker-proxy                        </text>
+<text x="412.80" y="591.42" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     9M   </text>
+<text x="496.80" y="591.42" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="591.42" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="591.42" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="591.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="591.42" fill="#6e7787" font-weight="bold" textLength="420.00" lengthAdjust="spacing" xml:space="preserve">   STATE     CONF IDENTITY         EVID   DET SEEN</text>
+<text x="1084.80" y="591.42" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="607.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="607.52" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  1420    </text>
+<text x="110.40" y="607.52" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">redis-server                        </text>
+<text x="412.80" y="607.52" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">    15M   </text>
+<text x="496.80" y="607.52" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="607.52" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="607.52" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="607.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="607.52" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">   CONFIRMED </text>
+<text x="765.60" y="607.52" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">0.82 </text>
+<text x="807.60" y="607.52" fill="#c8d0da" textLength="142.80" lengthAdjust="spacing" xml:space="preserve">Mavic 3          </text>
+<text x="950.40" y="607.52" fill="#6e7787" textLength="126.00" lengthAdjust="spacing" xml:space="preserve">Ax402  402   3s</text>
+<text x="1084.80" y="607.52" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="623.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="623.62" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2011    </text>
+<text x="110.40" y="623.62" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">cron                                </text>
+<text x="412.80" y="623.62" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     3M   </text>
+<text x="496.80" y="623.62" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="623.62" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="623.62" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="623.62" fill="#6e7787" textLength="319.20" lengthAdjust="spacing" xml:space="preserve">│     120m agl  14m/s  -58dBm  held 4m</text>
+<text x="1084.80" y="623.62" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="639.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="639.72" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2087    </text>
+<text x="110.40" y="639.72" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">rsyslogd                            </text>
+<text x="412.80" y="639.72" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     5M   </text>
+<text x="496.80" y="639.72" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="639.72" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="639.72" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="639.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="1084.80" y="639.72" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="655.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="655.82" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2154    </text>
+<text x="110.40" y="655.82" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">dbus-daemon                         </text>
+<text x="412.80" y="655.82" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     4M   </text>
+<text x="496.80" y="655.82" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="655.82" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="655.82" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="655.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="655.82" fill="#c8d0da" font-weight="bold" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">  detections</text>
+<text x="757.20" y="655.82" fill="#6e7787" textLength="92.40" lengthAdjust="spacing" xml:space="preserve"> 1284 total</text>
+<text x="1084.80" y="655.82" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="671.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="671.92" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2201    </text>
+<text x="110.40" y="671.92" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">bluetoothd                          </text>
+<text x="412.80" y="671.92" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     6M   </text>
+<text x="496.80" y="671.92" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="671.92" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="671.92" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="671.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="671.92" fill="#6e7787" font-weight="bold" textLength="428.40" lengthAdjust="spacing" xml:space="preserve">   TIME     CLASS          dBm  TUNE  ID           </text>
+<text x="1084.80" y="671.92" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="688.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="26.40" y="688.02" fill="#6e7787" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">  2260    </text>
+<text x="110.40" y="688.02" fill="#eef2f7" textLength="302.40" lengthAdjust="spacing" xml:space="preserve">polkitd                             </text>
+<text x="412.80" y="688.02" fill="#c8d0da" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">     9M   </text>
+<text x="496.80" y="688.02" fill="#3fca7c" textLength="50.40" lengthAdjust="spacing" xml:space="preserve">  0.0 </text>
+<text x="547.20" y="688.02" fill="#303030" textLength="84.00" lengthAdjust="spacing" xml:space="preserve">░░░░░░░░░░</text>
+<text x="639.60" y="688.02" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="688.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="688.02" fill="#c8d0da" textLength="210.00" lengthAdjust="spacing" xml:space="preserve">   19:48:45 Remote ID    </text>
+<text x="866.40" y="688.02" fill="#3fca7c" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -52</text>
+<text x="908.40" y="688.02" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve"> ch149  </text>
+<text x="975.60" y="688.02" fill="#c8d0da" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">Mavic 3      </text>
+<text x="1084.80" y="688.02" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="704.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="639.60" y="704.12" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="704.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="656.40" y="704.12" fill="#c8d0da" textLength="100.80" lengthAdjust="spacing" xml:space="preserve">   19:48:29 </text>
+<text x="757.20" y="704.12" fill="#6e7787" textLength="109.20" lengthAdjust="spacing" xml:space="preserve">OUI/SSID     </text>
+<text x="866.40" y="704.12" fill="#e0b755" textLength="42.00" lengthAdjust="spacing" xml:space="preserve">  -71</text>
+<text x="908.40" y="704.12" fill="#6e7787" textLength="67.20" lengthAdjust="spacing" xml:space="preserve">   ch6  </text>
+<text x="1084.80" y="704.12" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="720.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="639.60" y="720.22" fill="#3fb6cf" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="648.00" y="720.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="1084.80" y="720.22" fill="#6e7787" textLength="8.40" lengthAdjust="spacing" xml:space="preserve">│</text>
+<text x="18.00" y="736.32" fill="#3fb6cf" textLength="630.00" lengthAdjust="spacing" xml:space="preserve">└─────────────────────────────────────────────────────────────────────────┘</text>
+<text x="648.00" y="736.32" fill="#6e7787" textLength="445.20" lengthAdjust="spacing" xml:space="preserve">└───────────────────────────────────────────────────┘</text>
+<text x="18.00" y="752.42" fill="#6e7787" textLength="1075.20" lengthAdjust="spacing" xml:space="preserve">                                     q quit · r refresh · s sort by mem · f filter · ? help                                     </text>
+</svg>
